@@ -204,79 +204,84 @@ const finalizarCita = async () => {
       {/* SECCIÓN AUTOMATIZACIÓN (POR QUÉ NOSOTROS) */}
 {/* ... (Esta sección se mantiene igual) ... */}
 
-{/* GALERÍA DE TRABAJOS: DISEÑO DE TARJETAS COMPLETAS (CORREGIDO) */}
-<section id="galeria" className="py-32 px-6 bg-[#1a1a1a]">
+{/* Mosaico de Galería: 4 Imágenes Equilibradas */}
+<section className="py-20 px-6 bg-black">
   <div className="max-w-7xl mx-auto">
-    <div className="text-center mb-20 space-y-2 relative">
-      <div className="absolute inset-0 flex items-center justify-center opacity-10">
-        <span className="text-[140px] font-black uppercase text-white/5 whitespace-nowrap">ARTISTRY</span>
-      </div>
-      <h3 className="text-[#d4af37] text-[10px] font-black uppercase tracking-[0.5em] italic relative z-10">Mastery in Action</h3>
-      <h2 className="text-5xl font-black uppercase tracking-tighter text-white relative z-10">Nuestros Trabajos</h2>
-      <p className="text-white/40 text-sm max-w-lg mx-auto leading-relaxed pt-4 relative z-10">
-        Cortes de precisión, rituales de barba y el estilo que define al caballero moderno. Cada detalle cuenta.
-      </p>
-    </div>
-
-    {/* Mosaico Asimétrico Corregido: Las imágenes ahora ocupan TODA la tarjeta */}
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       
-      {/* Imagen 1: Corte de Autor (Grande, vertical) */}
+      {/* Imagen 1: Corte de Autor */}
       <motion.div 
-        className="md:col-span-2 md:row-span-2 rounded-xl border border-white/5 overflow-hidden group shadow-2xl shadow-black/40 relative"
-        initial={{ opacity: 0, y: 30 }}
+        className="rounded-xl border border-white/5 overflow-hidden group shadow-xl shadow-black/30 relative h-[350px]"
+        initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7 }}
-        viewport={{ once: true, amount: 0.1 }}
+        transition={{ duration: 0.5 }}
+        viewport={{ once: true }}
       >
         <img 
           src="https://images.unsplash.com/photo-1599351431202-1e0f0137899a?q=80&w=1000" 
-          className="w-full h-full object-cover transition duration-1000 group-hover:scale-105"
-          alt="Master Barber Cutting Hair"
+          className="w-full h-full object-cover transition duration-1000 group-hover:scale-110"
+          alt="Corte de Autor"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-8 flex flex-col justify-end">
-          <span className="text-white font-bold uppercase text-2xl tracking-tight">Corte de Autor</span>
-          <span className="text-[#d4af37] text-xs uppercase tracking-widest mt-1">Precisión & Estilo</span>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-6 flex flex-col justify-end">
+          <span className="text-white font-bold uppercase text-lg">Corte de Autor</span>
+          <span className="text-[#d4af37] text-[10px] uppercase tracking-widest mt-1">Precisión</span>
         </div>
       </motion.div>
 
-      {/* Imagen 2: Ritual de Barba (Cuadrada) */}
+      {/* Imagen 2: Ritual de Barba */}
       <motion.div 
-        className="rounded-xl border border-white/5 overflow-hidden group shadow-xl shadow-black/30 relative h-[300px] md:h-auto"
-        initial={{ opacity: 0, x: 20 }}
-        whileInView={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.6, delay: 0.2 }}
-        viewport={{ once: true, amount: 0.1 }}
+        className="rounded-xl border border-white/5 overflow-hidden group shadow-xl shadow-black/30 relative h-[350px]"
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        viewport={{ once: true }}
       >
         <img 
-          src="https://images.unsplash.com/photo-1593702275687-f8b402bf1fb5?q=80&w=600" 
+          src="https://images.pexels.com/photos/22610337/pexels-photo-22610337.jpeg" 
           className="w-full h-full object-cover transition duration-1000 group-hover:scale-110"
-          alt="Beard Trimming Ritual"
+          alt="Ritual de Barba"
         />
-        <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition duration-500 flex items-center justify-center p-6 text-center">
-           <div>
-             <span className="text-white font-bold uppercase text-sm border-b border-[#d4af37] pb-1 block">Ritual Completo</span>
-             <p className="text-white/60 text-xs mt-3 leading-relaxed">Incluye toalla caliente y perfilado de precisión.</p>
-           </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-6 flex flex-col justify-end">
+          <span className="text-white font-bold uppercase text-lg">Ritual Barba</span>
+          <span className="text-[#d4af37] text-[10px] uppercase tracking-widest mt-1">Tradición</span>
         </div>
       </motion.div>
 
-      {/* Imagen 3: Estilo Moderno (Cuadrada) */}
+      {/* Imagen 3: Estilo Moderno */}
       <motion.div 
-        className="rounded-xl border border-white/5 overflow-hidden group shadow-xl shadow-black/30 relative h-[300px] md:h-auto"
-        initial={{ opacity: 0, x: 20 }}
-        whileInView={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.6, delay: 0.4 }}
-        viewport={{ once: true, amount: 0.1 }}
+        className="rounded-xl border border-white/5 overflow-hidden group shadow-xl shadow-black/30 relative h-[350px]"
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        viewport={{ once: true }}
       >
         <img 
-          src="https://images.unsplash.com/photo-1533282960533-51328aa49826?q=80&w=600" 
+          src="https://images.pexels.com/photos/7781848/pexels-photo-7781848.jpeg" 
           className="w-full h-full object-cover transition duration-1000 group-hover:scale-110"
-          alt="Modern Hairstyle"
+          alt="Estilo Moderno"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/40 to-black/90 p-6 flex flex-col justify-end">
-           <span className="text-white font-bold uppercase text-lg tracking-tight">Grooming & Textura</span>
-           <span className="text-[#d4af37] text-xs uppercase tracking-widest mt-1">El Acabado Perfecto</span>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-6 flex flex-col justify-end">
+          <span className="text-white font-bold uppercase text-lg">Modern Style</span>
+          <span className="text-[#d4af37] text-[10px] uppercase tracking-widest mt-1">Tendencia</span>
+        </div>
+      </motion.div>
+
+      {/* Imagen 4: NUEVA - Afeitado Clásico */}
+      <motion.div 
+        className="rounded-xl border border-white/5 overflow-hidden group shadow-xl shadow-black/30 relative h-[350px]"
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+        viewport={{ once: true }}
+      >
+        <img 
+          src="https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=600" 
+          className="w-full h-full object-cover transition duration-1000 group-hover:scale-110"
+          alt="Afeitado Clásico"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-6 flex flex-col justify-end">
+          <span className="text-white font-bold uppercase text-lg">Afeitado Pro</span>
+          <span className="text-[#d4af37] text-[10px] uppercase tracking-widest mt-1">Hot Towel</span>
         </div>
       </motion.div>
 

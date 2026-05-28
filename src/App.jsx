@@ -45,6 +45,15 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   });
 
+  // REGISTRO AUTOMÁTICO DE LA APP (Va dentro de tu function App)
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log("Ecosistema PWA Prisma Activo"))
+        .catch(err => console.error("Error al registrar App:", err));
+    }
+  }, []);
+
   // DETECTOR DE URL SECRETA
   useEffect(() => {
     const verificarRutaSecreta = () => {
@@ -95,7 +104,9 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
   };
 
   // CONSULTA A SUPABASE
+  // CONSULTA A SUPABASE CON ANTENA EN TIEMPO REAL (REALTIME)
   useEffect(() => {
+    // 1. Función interna para traer los datos de la base de datos
     const obtenerDatos = async () => {
       setOcupados([]); 
       const anio = fechaSeleccionada.getFullYear();
@@ -105,6 +116,7 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
       
       let query = supabase.from('citas').select('*').eq('fecha', fechaFiltro);
       
+      // Si no es admin y es un barbero, filtramos solo sus citas
       if (!modoAdmin && reserva.barbero) {
         query = query.eq('barbero', reserva.barbero);
       }
@@ -115,7 +127,31 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
         if (!modoAdmin) setOcupados(data.map(c => c.horario));
       }
     };
+
+    // 2. Ejecución inicial al cargar la pantalla
     obtenerDatos();
+
+    // 3. Conexión al canal en tiempo real de Supabase
+    const canal = supabase
+      .channel('cambios-en-citas')
+      .on(
+        'postgres_changes', 
+        { 
+          event: 'INSERT', // Escucha solo cuando entra una fila nueva
+          schema: 'public', 
+          table: 'citas' 
+        }, 
+        (payload) => {
+          console.log('¡Nueva cita detectada en tiempo real!', payload);
+          obtenerDatos(); // Refresca la pantalla automáticamente sin parpadeos
+        }
+      )
+      .subscribe();
+
+    // 4. Limpieza del canal cuando el componente se destruye
+    return () => {
+      supabase.removeChannel(canal);
+    };
   }, [fechaSeleccionada, reserva.barbero, modoAdmin, triggerRecarga]);
 
   const manejarLoginAdmin = (e) => {

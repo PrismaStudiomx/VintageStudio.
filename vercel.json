@@ -1,5 +1,9 @@
 {
-  "deploymentWithIgnoredDeploymentProtection": true,
-  "crons": [],
-  "cleanUrls": true
+  "framework": "vite",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
 }

@@ -3,17 +3,18 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  // base: './' es vital para que las rutas de los archivos sean relativas
+  base: './', 
   plugins: [
     react(),
     tailwindcss(),
   ],
   build: {
-    // 1. Aumentamos el límite de tamaño para evitar errores de compilación
+    // Aumenta el límite para que el build no falle por tamaño
     chunkSizeWarningLimit: 1000, 
-    
-    // 2. Optimizamos la división de archivos (esto evita que el index se corrompa)
     rollupOptions: {
       output: {
+        // Separa las librerías pesadas en un archivo llamado 'vendor'
         manualChunks(id) {
           if (id.includes('node_modules')) {
             return 'vendor';

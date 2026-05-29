@@ -211,7 +211,7 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
       .on(
         'postgres_changes', 
         { 
-          event: 'INSERT', // Escucha solo cuando entra una fila nueva
+          event: '*', // Escucha TODO: Citas nuevas (Insert), pagos (Update) y cancelaciones (Delete)
           schema: 'public', 
           table: 'citas' 
         }, 
@@ -261,7 +261,7 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
   const registrarWalkIn = async (e) => {
     e.preventDefault();
     await supabase.from('citas').insert([{ 
-      fecha: fechaSeleccionada.toISOString().split('T')[0], 
+      fecha: `${fechaSeleccionada.getFullYear()}-${String(fechaSeleccionada.getMonth() + 1).padStart(2, '0')}-${String(fechaSeleccionada.getDate()).padStart(2, '0')}`, 
       horario: new Date().toLocaleTimeString(), 
       barbero: formWalkIn.barbero, 
       servicio: formWalkIn.servicio,
@@ -292,7 +292,10 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
   // 🚀 FUNCIÓN ESTRELLA: GENERADOR DE PDF DE AUDITORÍA (VERSIÓN DESGLOSE DE SERVICIOS Y MÉTODOS DE PAGO)
   const descargarCorteCaja = () => {
     const totalIngresos = calcularIngresosDelDia();
-    const fechaFinal = fechaSeleccionada.toISOString().split('T')[0];
+    const anio = fechaSeleccionada.getFullYear();
+const mes = String(fechaSeleccionada.getMonth() + 1).padStart(2, '0');
+const dia = String(fechaSeleccionada.getDate()).padStart(2, '0');
+const fechaFinal = `${anio}-${mes}-${dia}`;
     const citasFiltradas = citasDelDia.filter(cita => BARBEROS.includes(cita.barbero));
 
     // VARIABLES PARA CONTADORES DE PAGO REALES
@@ -636,7 +639,7 @@ Agradecemos su puntualidad. ¡Nos vemos pronto!`;
                 <div>
                   <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-white">PANEL DE AGENDAS</h1>
                   <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">
-                    FECHA: <span className="font-mono text-neutral-400 font-black">2026-05-28</span>
+                    FECHA: <span className="font-mono text-neutral-400 font-black">{new Date().toLocaleDateString('es-MX')}</span>
                   </p>
                 </div>
                 
@@ -646,6 +649,14 @@ Agradecemos su puntualidad. ¡Nos vemos pronto!`;
                 </div>
               </div>
 
+              {/* CAJA DE INGRESOS TOTALES EN AGENDA */}
+              <div className="bg-[#161616] border border-neutral-800 rounded-xl p-4 mb-3 shadow-lg flex justify-between items-center max-w-2xl">
+                <div>
+                  <span className="block text-[9px] text-neutral-500 uppercase tracking-widest font-black mb-1">Caja Estimada Hoy</span>
+                  <span className="block text-[9px] text-[#d4af37]/60 uppercase tracking-wider font-bold">Datos en vivo</span>
+                </div>
+                <span className="text-2xl text-[#d4af37] font-black font-mono">${calcularIngresosDelDia().toLocaleString()} MXN</span>
+              </div>
               <div className="flex flex-col sm:flex-row gap-3 max-w-2xl">
                 <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1">
                   <span className="text-[10px] text-white uppercase tracking-wider font-black">✓ SERVICIOS LISTOS</span>
@@ -722,6 +733,7 @@ Agradecemos su puntualidad. ¡Nos vemos pronto!`;
               </div>
             </>
           ) : (
+            
             <>
               {/* --- CONTROL INTERNO: NUEVA PESTAÑA ANALÍTICA (MÉTRICAS E IMAGEN) --- */}
               <div>
@@ -798,8 +810,8 @@ Agradecemos su puntualidad. ¡Nos vemos pronto!`;
         </div>
 
         {/* BARRA DE NAVEGACIÓN INFERIOR PREMIUM (Fija abajo flotando) */}
-        <div className="fixed bottom-0 left-0 w-full bg-[#0a0a0a]/90 backdrop-blur-md border-t border-white/[0.03] flex justify-around items-center py-4 z-50 shadow-2xl">
-           <button 
+
+<div className="fixed bottom-0 left-0 w-full lg:relative lg:bottom-auto bg-[#0a0a0a]/90 backdrop-blur-md border-t border-white/[0.03] flex justify-around items-center py-4 z-50 shadow-2xl">           <button 
              onClick={() => setVistaAdminTab("agenda")} 
              className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'agenda' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
            >

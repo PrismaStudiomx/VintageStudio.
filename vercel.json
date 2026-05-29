@@ -1,5 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "deploymentWithIgnoredDeploymentProtection": true,
+  "crons": [],
+  "cleanUrls": true
 }

@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import html2pdf from 'html2pdf.js'; // 🚀 NUEVA LIBRERÍA PARA PDF
+import html2pdf from 'html2pdf.js';
+
 
 const HORARIOS_SEMANA = ["10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM", "6:00 PM", "7:00 PM"];
 const HORARIOS_SABADO = ["10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM"];
@@ -16,7 +17,10 @@ const PIN_SEGURIDAD = "1234";
 export default function BarberiaPremium() {
   const [step, setStep] = useState(1);
   const [reserva, setReserva] = useState({ servicio: null, barbero: null, horario: null });
+  const [vistaAdminTab, setVistaAdminTab] = useState("agenda"); // Puede ser "agenda" o "grafica"
   const [ocupados, setOcupados] = useState([]);
+  const [datosSemanales, setDatosSemanales] = useState([]); // <-- NUEVO ESTADO PARA GRÁFICA
+  const [cargandoGrafica, setCargandoGrafica] = useState(false); // <-- NUEVO ESTADO DE CARGA
   // Agrega estas líneas junto a tus otros estados (useState)
 const [menuBarberoAbierto, setMenuBarberoAbierto] = useState(false);
 const [menuServicioAbierto, setMenuServicioAbierto] = useState(false);
@@ -71,6 +75,75 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
     return () => window.removeEventListener('hashchange', verificarRutaSecreta);
   }, []);
 
+  // ==========================================
+  // EFECTO: CALCULAR VENTAS DE LA SEMANA PARA LA GRÁFICA
+  // ==========================================
+  useEffect(() => {
+    if (modoAdmin && vistaAdminTab === "grafica") {
+      async function obtenerVentasSemana() {
+        try {
+          setCargandoGrafica(true);
+          const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+          const deLaSemana = [];
+          
+          // 1. Estructurar el esqueleto de los últimos 7 días
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const tzOffset = d.getTimezoneOffset() * 60000;
+            const fechaISO = new Date(d.getTime() - tzOffset).toISOString().split('T')[0];
+            const nombreDia = i === 0 ? 'Hoy' : `${diasSemana[d.getDay()]} ${d.getDate()}`;
+            deLaSemana.push({ fecha: fechaISO, dia: nombreDia, monto: 0, pct: 8, activo: i === 0 });
+          }
+
+          const fechaInicio = deLaSemana[0].fecha;
+          const fechaFin = deLaSemana[6].fecha;
+
+          // 2. Traer las citas de esa semana
+          const { data, error } = await supabase
+            .from('citas')
+            .select('*')
+            .gte('fecha', fechaInicio)
+            .lte('fecha', fechaFin);
+
+          if (error) throw error;
+
+          if (data) {
+            // 3. Mapear y sumar ingresos (Solo Efectivo/Tarjeta)
+            deLaSemana.forEach(diaObj => {
+              const citasDelDiaEsp = data.filter(c => 
+                c.fecha === diaObj.fecha && 
+                c.metodo_pago && 
+                (c.metodo_pago.toLowerCase().trim() === 'efectivo' || c.metodo_pago.toLowerCase().trim() === 'tarjeta')
+              );
+
+              let totalDia = 0;
+              citasDelDiaEsp.forEach(cita => {
+                const s = SERVICIOS.find(serv => serv.nombre.toLowerCase().trim() === (cita.servicio ? cita.servicio.toLowerCase().trim() : ""));
+                const precioNum = s ? parseInt(s.precio.replace('$', '')) : 350;
+                totalDia += precioNum;
+              });
+              diaObj.monto = totalDia;
+            });
+
+            // 4. Calcular la altura de la barra en base a la venta máxima
+            const maxVenta = Math.max(...deLaSemana.map(d => d.monto), 1);
+            deLaSemana.forEach(diaObj => {
+              diaObj.pct = diaObj.monto === 0 ? 8 : Math.round((diaObj.monto / maxVenta) * 85) + 10;
+            });
+
+            setDatosSemanales(deLaSemana);
+          }
+        } catch (err) {
+          console.error("Error al cargar la gráfica semanal:", err);
+        } finally {
+          setCargandoGrafica(false);
+        }
+      }
+      obtenerVentasSemana();
+    }
+  }, [modoAdmin, vistaAdminTab, citasDelDia]);
+  
   const horariosAMostrar = () => {
     const dia = fechaSeleccionada.getDay();
     if (dia === 0) return [];
@@ -501,6 +574,7 @@ Agradecemos su puntualidad. ¡Nos vemos pronto!`;
   alert("¡Guardado exitosamente!");
   setTriggerRecarga(prev => prev + 1);
 };
+  
   // ==========================================
   // VISTA 2: PRISMA DASHBOARD (PANTALLA DE ADMIN)
   // ==========================================
@@ -526,16 +600,14 @@ Agradecemos su puntualidad. ¡Nos vemos pronto!`;
       );
     }
  
-
-    // CÁLCULOS PARA TARJETAS KPI
     const citasPagadas = citasDelDia.filter(c => c.metodo_pago && (c.metodo_pago.toLowerCase().trim() === 'efectivo' || c.metodo_pago.toLowerCase().trim() === 'tarjeta'));
     const citasPendientes = citasDelDia.filter(c => !c.metodo_pago || (c.metodo_pago.toLowerCase().trim() !== 'efectivo' && c.metodo_pago.toLowerCase().trim() !== 'tarjeta'));
     
     return (
-      <div className="bg-[#0f0f0f] text-white min-h-screen font-sans p-4 md:p-10 selection:bg-[#d4af37] selection:text-black antialiased">
+      <div className="bg-[#0f0f0f] text-white min-h-screen font-sans p-4 md:p-10 selection:bg-[#d4af37] selection:text-black antialiased pb-40">
         
-       {/* BARRA DE NAVEGACIÓN SUPERIOR */}
-        <nav className="flex justify-between items-center mb-12 border-b border-white/[0.02] pb-6">
+        {/* BARRA SUPERIOR DE CONSOLA */}
+        <nav className="flex justify-between items-center mb-8 border-b border-white/[0.02] pb-6">
           <div>
             <div className="text-2xl font-black tracking-wide text-white">
               PRISMA<span className="text-[#d4af37] font-light">DASHBOARD</span>
@@ -543,161 +615,208 @@ Agradecemos su puntualidad. ¡Nos vemos pronto!`;
             <p className="text-[9px] text-[#d4af37] tracking-[0.25em] uppercase mt-1 font-bold opacity-90">Ecosistema Multi-Barbero</p>
           </div>
           <button 
-  onClick={() => { 
-    setPinCorrecto(false);   // Bloquea el panel
-    setPinIngresado("");     // Limpia el NIP
-    setErrorPin(false);      // Quita errores previos
-    window.location.hash = "#login"; // Mueve la URL a la pantalla del NIP
-  }} 
-  className="text-[11px] tracking-widest uppercase font-black text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 px-5 py-2.5 rounded-xl transition-all bg-transparent"
->
-  Cerrar Sesión
-</button>
+            onClick={() => { 
+              setPinCorrecto(false);
+              setPinIngresado("");
+              setErrorPin(false);
+              window.location.hash = "#login";
+            }} 
+            className="text-[11px] tracking-widest uppercase font-black text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 px-5 py-2.5 rounded-xl transition-all"
+          >
+            Cerrar Sesión
+          </button>
         </nav>
 
-        {/* CONTENEDOR PANORÁMICO FLUÍDO */}
-        <div className="w-full mx-auto space-y-8">
+        <div className="w-full mx-auto space-y-6 max-w-md md:max-w-full">
           
-          {/* SECCIÓN DE CABECERA Y ACCIONES ALINEADAS (PC) */}
-          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6 pb-2">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-white">PANEL DE AGENDAS</h1>
-              <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">
-                FECHA SELECCIONADA: <span className="font-mono text-neutral-400 font-black">2026-05-28</span>
-              </p>
-            </div>
-            
-            {/* GRUPO DE ACCIONES CON FONDO EN ESCUADRA (COMPACTAS) */}
-            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 lg:self-end">
-              {/* Botón Venta Mostrador */}
-              <button 
-                onClick={() => setMostrarModalWalkIn(true)} 
-                className="bg-[#d4af37] text-black py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider flex items-center justify-center gap-1.5 transition-all hover:bg-white active:scale-98 shadow-md"
-              >
-                <span className="text-sm font-light">+</span> VENTA MOSTRADOR
-              </button>
-              
-              {/* Botón Descargar PDF - CON FONDO GRIS ASIGNADO */}
-              <button 
-                onClick={descargarCorteCaja} 
-                className="bg-[#161616] border border-neutral-800 hover:border-neutral-700 text-[#d4af37] py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider flex items-center justify-center gap-2 transition-all hover:bg-neutral-900 active:scale-98 shadow-sm"
-              >
-                <span>📥</span> DESCARGAR PDF
-              </button>
-
-              {/* Métrica De Caja Integrada - CON FONDO GRIS ASIGNADO */}
-              <div className="bg-[#161616] border border-neutral-800 px-5 py-2 rounded-xl flex flex-col items-center justify-center min-w-[160px] shadow-sm">
-                <span className="block text-[8px] text-neutral-400 uppercase tracking-widest font-black mb-0.5">CAJA ESTIMADA HOY</span>
-                <span className="text-lg text-[#d4af37] font-black font-mono">${calcularIngresosDelDia()} MXN</span>
-              </div>
-            </div>
-          </div>
-
-          {/* METRICAS SECUNDARIAS COMPACTAS - CON FONDO GRIS ASIGNADO (FIEL A IMAGE_1D69FF.PNG) */}
-          <div className="flex flex-col sm:flex-row gap-3 max-w-2xl">
-            <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1 shadow-sm">
-              <span className="text-[10px] text-white uppercase tracking-wider font-black flex items-center gap-1.5">
-                <span className="text-emerald-500">✓</span> SERVICIOS LISTOS
-              </span>
-              <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPagadas.length}</span>
-            </div>
-            
-            <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1 shadow-sm">
-              <span className="text-[10px] text-white uppercase tracking-wider font-black flex items-center gap-1.5">
-                <span className="text-[#d4af37]">⏳</span> POR COBRAR
-              </span>
-              <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPendientes.length}</span>
-            </div>
-          </div>
-         
-          {/* REJILLA DE SILLAS DE BARBEROS - CON FONDO GRIS ASIGNADO */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {BARBEROS.map((barbero) => {
-              const esperaDelBarbero = citasDelDia.filter(c => c.barbero === barbero && (!c.metodo_pago || (c.metodo_pago.toLowerCase().trim() !== 'efectivo' && c.metodo_pago.toLowerCase().trim() !== 'tarjeta')));
-              
-              return (
-                <div key={barbero} className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl transition-all hover:border-neutral-700">
-                  {/* Cabecera de la Silla */}
-                  <div className="border-b border-white/[0.03] pb-3 mb-4 flex justify-between items-center">
-                    <h3 className="text-xs font-black uppercase text-white tracking-wider flex items-center">
-                      <span className="inline-block w-2 h-2 rounded-full bg-[#d4af37] mr-2"></span>
-                      SILLAS DE {barbero}
-                    </h3>
-                    <span className="text-[9px] bg-[#0f0f0f] border border-neutral-800 text-neutral-400 px-2.5 py-0.5 rounded-full font-bold font-mono">
-                      {esperaDelBarbero.length} citas
-                    </span>
-                  </div>
-
-                  {/* Turnos / Estado de Silla */}
-                  <div className="space-y-2 min-h-[160px] flex flex-col justify-center">
-                    {esperaDelBarbero.length === 0 ? (
-                      <div className="text-center py-10 border border-dashed border-neutral-800/80 rounded-xl bg-[#0f0f0f]/40">
-                        <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-black">SIN CITAS ASIGNADAS</p>
-                      </div>
-                    ) : (
-                      esperaDelBarbero.map((cita, idx) => (
-                        <div key={idx} className="bg-[#0f0f0f] p-3 rounded-xl border border-neutral-800 hover:border-neutral-700 transition-colors">
-                          <span className="text-[#d4af37] font-mono text-[9px] font-black block mb-1">• {cita.horario}</span>
-                          <p className="text-xs font-black text-white uppercase tracking-tight">{cita.cliente_nombre || 'Cliente Online'}</p>
-                          <p className="text-[10px] text-white/70 uppercase truncate mt-0.5">{cita.servicio}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
+          {vistaAdminTab === "agenda" ? (
+            <>
+              {/* --- CONTROL INTERNO: PESTAÑA AGENDA OPERATIVA --- */}
+              <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6 pb-2">
+                <div>
+                  <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-white">PANEL DE AGENDAS</h1>
+                  <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">
+                    FECHA: <span className="font-mono text-neutral-400 font-black">2026-05-28</span>
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* HISTORIAL DE VENTAS - CON FONDO GRIS ASIGNADO */}
-          <div className="pt-4">
-            <p className="text-xs text-white uppercase tracking-[0.15em] font-black mb-4">💰 HISTORIAL DE VENTAS LIQUIDADAS</p>
-            <div className="bg-[#161616] border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/[0.04] bg-[#0f0f0f]/60 text-[9px] text-white uppercase font-black tracking-widest">
-                      <th className="p-4 pl-6">Horario</th>
-                      <th className="p-4">Barbero</th>
-                      <th className="p-4">Servicio</th>
-                      <th className="p-4">Método Pago</th>
-                      <th className="p-4 pr-6 text-right">Monto</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.02] text-xs uppercase font-black text-white">
-                    {citasPagadas.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="p-8 text-center text-white/40 text-[9px] font-black tracking-widest">
-                          AÚN NO HAY VENTAS LIQUIDADAS HOY.
-                        </td>
-                      </tr>
-                    ) : (
-                      citasPagadas.map((cita, idx) => {
-                        const precioEncontrado = SERVICIOS.find(s => s.nombre.toLowerCase().trim() === (cita.servicio ? cita.servicio.toLowerCase().trim() : ""))?.precio || "$350";
-                        return (
-                          <tr key={idx} className="hover:bg-[#0f0f0f]/50 transition-colors">
-                            <td className="p-4 pl-6 font-mono text-[#d4af37]">{cita.horario}</td>
-                            <td className="p-4 text-white">{cita.barbero}</td>
-                            <td className="p-4 text-white/80">{cita.servicio}</td>
-                            <td className="p-4">
-                              <span className="text-[9px] font-black tracking-wider text-[#d4af37]">
-                                {cita.metodo_pago.toLowerCase().trim() === 'efectivo' ? '✓ EFECTIVO' : '✓ TARJETA'}
-                              </span>
-                            </td>
-                            <td className="p-4 pr-6 text-right font-mono text-white">${precioEncontrado.replace('$', '')}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                
+                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+                  <button onClick={() => setMostrarModalWalkIn(true)} className="bg-[#d4af37] text-black py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider transition-all hover:bg-white">+ VENTA MOSTRADOR</button>
+                  <button onClick={descargarCorteCaja} className="bg-[#161616] border border-neutral-800 text-[#d4af37] py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider transition-all hover:bg-neutral-900">📥 DESCARGAR PDF</button>
+                </div>
               </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 max-w-2xl">
+                <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1">
+                  <span className="text-[10px] text-white uppercase tracking-wider font-black">✓ SERVICIOS LISTOS</span>
+                  <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPagadas.length}</span>
+                </div>
+                <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1">
+                  <span className="text-[10px] text-white uppercase tracking-wider font-black">⏳ POR COBRAR</span>
+                  <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPendientes.length}</span>
+                </div>
+              </div>
+             
+              {/* REJILLA DE SILLAS DE BARBEROS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {BARBEROS.map((barbero) => {
+                  const esperaDelBarbero = citasDelDia.filter(c => c.barbero === barbero && (!c.metodo_pago || (c.metodo_pago.toLowerCase().trim() !== 'efectivo' && c.metodo_pago.toLowerCase().trim() !== 'tarjeta')));
+                  return (
+                    <div key={barbero} className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+                      <div className="border-b border-white/[0.03] pb-3 mb-4 flex justify-between items-center">
+                        <h3 className="text-xs font-black uppercase text-white tracking-wider">SILLAS DE {barbero}</h3>
+                        <span className="text-[9px] bg-[#0f0f0f] border border-neutral-800 text-neutral-400 px-2.5 py-0.5 rounded-full font-mono">{esperaDelBarbero.length} citas</span>
+                      </div>
+                      <div className="space-y-2 min-h-[160px] flex flex-col justify-center">
+                        {esperaDelBarbero.length === 0 ? (
+                          <div className="text-center py-10 border border-dashed border-neutral-800/80 rounded-xl">
+                            <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-black">SIN CITAS</p>
+                          </div>
+                        ) : (
+                          esperaDelBarbero.map((cita, idx) => (
+                            <div key={idx} className="bg-[#0f0f0f] p-3 rounded-xl border border-neutral-800">
+                              <span className="text-[#d4af37] font-mono text-[9px] font-black block mb-1">• {cita.horario}</span>
+                              <p className="text-xs font-black text-white uppercase">{cita.cliente_nombre || 'Cliente Online'}</p>
+                              <p className="text-[10px] text-white/70 uppercase truncate">{cita.servicio}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* HISTORIAL DE VENTAS */}
+              <div className="pt-4">
+                <p className="text-xs text-white uppercase tracking-[0.15em] font-black mb-4">💰 HISTORIAL DE VENTAS LIQUIDADAS</p>
+                <div className="bg-[#161616] border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/[0.04] bg-[#0f0f0f]/60 text-[9px] text-white uppercase font-black">
+                        <th className="p-4 pl-6">Horario</th>
+                        <th className="p-4">Barbero</th>
+                        <th className="p-4">Servicio</th>
+                        <th className="p-4 pr-6 text-right">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.02] text-xs uppercase font-black text-white">
+                      {citasPagadas.length === 0 ? (
+                        <tr><td colSpan="4" className="p-8 text-center text-white/40 text-[9px] tracking-widest">NO HAY VENTAS HOY.</td></tr>
+                      ) : (
+                        citasPagadas.map((cita, idx) => {
+                          const precioEncontrado = SERVICIOS.find(s => s.nombre.toLowerCase().trim() === (cita.servicio ? cita.servicio.toLowerCase().trim() : ""))?.precio || "$350";
+                          return (
+                            <tr key={idx} className="hover:bg-[#0f0f0f]/50 transition-colors">
+                              <td className="p-4 pl-6 font-mono text-[#d4af37]">{cita.horario}</td>
+                              <td className="p-4">{cita.barbero}</td>
+                              <td className="p-4 text-white/80">{cita.servicio}</td>
+                              <td className="p-4 pr-6 text-right font-mono">${precioEncontrado.replace('$', '')}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* --- CONTROL INTERNO: NUEVA PESTAÑA ANALÍTICA (MÉTRICAS E IMAGEN) --- */}
+              <div>
+                <h1 className="text-3xl font-black uppercase tracking-tight text-white">RENDIMIENTO</h1>
+                <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">Estadísticas comerciales de la semana</p>
+              </div>
+
+              {/* Caja de Ingresos Totales (Estilo Premium - DATOS REALES LIMPIOS) */}
+            <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-6 text-center shadow-lg">
+              <span className="block text-[9px] text-neutral-500 uppercase tracking-widest font-black mb-1">Caja Estimada Hoy</span>
+              <span className="text-3xl text-[#d4af37] font-black font-mono">${calcularIngresosDelDia().toLocaleString()} MXN</span>
+              <span className="block text-[9px] text-neutral-600 uppercase tracking-wider mt-1 font-bold">Datos en vivo desde Supabase</span>
             </div>
-          </div>
+
+            {/* GRÁFICA DE ALTA FIDELIDAD CON MARGEN DE SEGURIDAD PROTEGIDO */}
+            <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 shadow-2xl mb-8"></div>
+
+              {/* GRÁFICA DE ALTA FIDELIDAD CON CONEXIÓN REAL A SUPABASE */}
+              <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 shadow-2xl">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-neutral-400">Ingresos Semanales</span>
+                  <span className="text-xs font-black text-white font-mono">
+                    ${datosSemanales.reduce((acc, curr) => acc + curr.monto, 0).toLocaleString()} MXN
+                  </span>
+                </div>
+                
+                {/* Contenedor de Barras Reactivo con altura fija protegida */}
+                <div className="h-44 w-full flex items-end justify-between px-2 pt-4 relative">
+                  {/* Líneas Horizontales de Guía */}
+                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7 pt-4">
+                    <div className="border-b border-neutral-900/60 w-full"></div>
+                    <div className="border-b border-neutral-900/60 w-full"></div>
+                    <div className="border-b border-neutral-900/60 w-full"></div>
+                  </div>
+
+                  {/* Renderizado estructural dinámico de los 7 días */}
+                  {cargandoGrafica ? (
+                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-[#d4af37] font-black uppercase tracking-widest z-20">
+                      Calculando historial...
+                    </div>
+                  ) : (
+                    datosSemanales.map((bar, i) => (
+                      <div key={i} className="flex flex-col items-center flex-1 group relative z-10 mx-0.5 sm:mx-1 h-full justify-end">
+                        {/* Burbuja informativa al pasar el cursor (Muestra el monto real) */}
+                        <div className="absolute -top-7 bg-black border border-neutral-800 text-[#d4af37] font-mono text-[9px] font-black px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-30">
+                          ${bar.monto.toLocaleString()}
+                        </div>
+                        
+                        {/* Columna de la Barra */}
+                        <div 
+                          style={{ height: `${bar.pct}%` }} 
+                          className={`w-full max-w-[24px] ${
+                            bar.activo 
+                              ? 'bg-[#d4af37] shadow-[0_0_12px_rgba(212,175,55,0.4)]' 
+                              : 'bg-neutral-800/80 group-hover:bg-neutral-700'
+                          } rounded-t-md transition-all duration-700 shadow-md`}
+                        ></div>
+                        
+                        {/* Texto inferior (Día) */}
+                        <span className={`text-[8px] sm:text-[9px] font-black uppercase tracking-tighter mt-2.5 ${bar.activo ? 'text-[#d4af37]' : 'text-neutral-500'}`}>
+                          {bar.dia}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Espaciador de seguridad al final para evitar el corte de la barra de navegación */}
+              <div className="h-12"></div>
+            </>
+          )}
 
         </div>
 
-        {/* MODAL MANTIENE SU DISEÑO ELEVADO */}
+        {/* BARRA DE NAVEGACIÓN INFERIOR PREMIUM (Fija abajo flotando) */}
+        <div className="fixed bottom-0 left-0 w-full bg-[#0a0a0a]/90 backdrop-blur-md border-t border-white/[0.03] flex justify-around items-center py-4 z-50 shadow-2xl">
+           <button 
+             onClick={() => setVistaAdminTab("agenda")} 
+             className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'agenda' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
+           >
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
+             <span className="text-[9px] font-black uppercase tracking-widest">Ver Agenda</span>
+           </button>
+           
+           <button 
+             onClick={() => setVistaAdminTab("grafica")} 
+             className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'grafica' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
+           >
+             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>
+             <span className="text-[9px] font-black uppercase tracking-widest">Ver Gráfica</span>
+           </button>
+        </div>
+
+        {/* CONTENEDOR MODAL VENTA MOSTRADOR (Conserva intacta toda tu lógica de captura) */}
         {mostrarModalWalkIn && (
           <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4">
             <div className="bg-[#161616] border border-neutral-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl">

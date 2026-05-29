@@ -402,7 +402,7 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
         </div>
 
         <div style="text-align: center; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-          <p style="font-size: 8pt; color: #999; text-transform: uppercase; letter-spacing: 1px;">Documento generado automáticamente por Prisma Studio POS</p>
+          <p style="font-size: 8pt; color: #999; text-transform: uppercase; letter-spacing: 1px;">Documento generado automáticamente por Prisma Studio MX POS</p>
         </div>
       </div>
     `;

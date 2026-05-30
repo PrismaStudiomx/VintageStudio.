@@ -228,8 +228,8 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
     };
   }, [fechaSeleccionada, reserva.barbero, modoAdmin, triggerRecarga]);
 
- // =========================================================================
-// 1. FUNCIÓN TRADUCTORA: Convierte la llave al formato binario que exige el celular
+// =========================================================================
+// 1. FUNCIÓN TRADUCTORA (Ponla hasta arriba de tu archivo, AFUERA del componente)
 // =========================================================================
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -246,37 +246,40 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+
 // =========================================================================
-// 2. FUNCIÓN MODIFICADA: Ya incluye la traducción automática de la llave
+// LAS SIGUIENTES DOS FUNCIONES VAN ADENTRO DE TU COMPONENTE (BarberiaPremium / App)
+// Ponlas justo donde tenías tus antiguas funciones de login
 // =========================================================================
+
+// 2. FUNCIÓN DE NOTIFICACIONES (Con la traducción de la llave integrada)
 const activarNotificacionesNativas = async (rol, nombreBarbero) => {
   try {
-    // Pedirle permiso al celular
+    // Pedir permiso al teléfono (si ya tiene permiso, pasa de largo automáticamente)
     const permiso = await Notification.requestPermission();
     if (permiso !== 'granted') {
-      console.log('Permiso de notificaciones denegado por el usuario');
+      console.log('Permiso de notificaciones denegado');
       return;
     }
 
-    // Esperar a que el Service Worker esté listo
+    // Esperar a que el Service Worker del navegador esté activo
     const registro = await navigator.serviceWorker.ready;
     
-    // Tu llave original (le quitamos los == del final para evitar problemas)
+    // Tu llave VAPID pública
     const llavePublicaVapid = 'BOmw7H_04kS6j2X4L9_NzQ8uVw6Z8Yx9Cp1Gv7Bt3Rm8Wv9Xb4Nk7Mz2Pq5Lw8Vv9Yc3Bx6N8Mv4Nx1Zb5Kz7Qw';
     
-    // 🔥 AQUÍ SE HACE LA MAGIA: Traducimos la llave a binario
+    // Convertimos la llave a binario limpio para evitar el error del PushManager
     const llaveConvertida = urlBase64ToUint8Array(llavePublicaVapid);
 
-    // Suscribir el dispositivo usando la llave perfectamente formateada
+    // Suscribir el celular
     const suscripcion = await registro.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: llaveConvertida // <-- Pasamos la llave corregida aquí
+      applicationServerKey: llaveConvertida
     });
 
-    // Extraer las llaves de encriptación seguras del teléfono
     const claves = JSON.parse(JSON.stringify(suscripcion));
 
-    // Guardar todo en tu tabla de Supabase
+    // Guardar o actualizar en Supabase (evitando duplicados gracias al endpoint)
     await supabase.from('suscripciones_push').upsert({
       endpoint: suscripcion.endpoint,
       auth: claves.keys.auth,
@@ -288,6 +291,42 @@ const activarNotificacionesNativas = async (rol, nombreBarbero) => {
     console.log(`🚀 ¡Notificaciones configuradas con éxito para: ${nombreBarbero || rol}!`);
   } catch (error) {
     console.error('Error al activar las notificaciones nativas:', error);
+  }
+};
+
+// 3. TU FUNCIÓN DE LOGIN CORREGIDA (Llama a la función de arriba según el PIN)
+const manejarLoginAdmin = (e) => {
+  e.preventDefault(); // Evita que la página se recargue al dar enter
+  
+  const PINS_ACCESO = {
+    "1234": "admin",        // Administrador global
+    "1111": "David",        // Barbero David
+    "2222": "Jorge",        // Barbero Jorge
+    "3333": "Francisco"     // Barbero Francisco
+  };
+
+  const usuarioEncontrado = PINS_ACCESO[pinIngresado];
+
+  if (usuarioEncontrado === "admin") {
+    setPinCorrecto(true);
+    setModoAdmin(true);
+    setBarberoLogueado(null);
+    setErrorPin(false);
+    
+    // Enlazar este dispositivo como Administrador
+    activarNotificacionesNativas('admin', null);
+
+  } else if (usuarioEncontrado) {
+    setBarberoLogueado(usuarioEncontrado);
+    setModoAdmin(false);
+    setErrorPin(false);
+    
+    // Enlazar este dispositivo con el Barbero asignado
+    activarNotificacionesNativas('barbero', usuarioEncontrado);
+
+  } else {
+    setErrorPin(true);
+    setPinIngresado("");
   }
 };
 

@@ -1,5 +1,5 @@
 // 1. Cambiamos la versión a 'v2'. Esto le avisa al celular que hay código nuevo.
-const CACHE_NAME = 'prisma-cache-v2';
+const CACHE_NAME = 'prisma-cache-v3';
 const assets = ['/', '/index.html'];
 
 self.addEventListener('install', (e) => {

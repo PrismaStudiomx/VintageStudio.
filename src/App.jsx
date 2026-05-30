@@ -21,42 +21,6 @@ export default function BarberiaPremium() {
   const [ocupados, setOcupados] = useState([]);
   const [datosSemanales, setDatosSemanales] = useState([]); // <-- NUEVO ESTADO PARA GRÁFICA
   const [cargandoGrafica, setCargandoGrafica] = useState(false); // <-- NUEVO ESTADO DE CARGA
-  // 🎬 SIMULADOR PROFESIONAL PARA GRABACIÓN DE VIDEO
-useEffect(() => {
-  if (modoAdmin && vistaAdminTab === "grafica") {
-    // 1. Rellenamos los días anteriores con datos "falsos" pero realistas
-    setDatosSemanales(prev => prev.map(dia => {
-      if (dia.dia !== 'Hoy') {
-        // Genera un monto aleatorio entre $2,000 y $5,000 para los días pasados
-        const montoRandom = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
-        const pctRandom = Math.floor(Math.random() * (85 - 40 + 1)) + 40; // Altura de la barra
-        return { ...dia, monto: montoRandom, pct: pctRandom };
-      }
-      // El día de hoy empieza bajito para que se vea crecer
-      return { ...dia, monto: 850, pct: 15 };
-    }));
-
-    // 2. Iniciamos la animación de crecimiento constante para "Hoy"
-    const intervaloVideo = setInterval(() => {
-      setDatosSemanales(prevDatos => {
-        return prevDatos.map(dia => {
-          if (dia.dia === 'Hoy') {
-            const montosSimulados = [350, 450, 600];
-            const aumento = montosSimulados[Math.floor(Math.random() * montosSimulados.length)];
-            
-            const nuevoMonto = dia.monto + aumento;
-            const nuevoPct = Math.min(100, dia.pct + 6); 
-            
-            return { ...dia, monto: nuevoMonto, pct: nuevoPct };
-          }
-          return dia;
-        });
-      });
-    }, 2000); // Sube cada 2 segundos
-
-    return () => clearInterval(intervaloVideo);
-  }
-}, [modoAdmin, vistaAdminTab]);
   // Agrega estas líneas junto a tus otros estados (useState)
 const [menuBarberoAbierto, setMenuBarberoAbierto] = useState(false);
 const [menuServicioAbierto, setMenuServicioAbierto] = useState(false);
@@ -114,71 +78,52 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
   // ==========================================
   // EFECTO: CALCULAR VENTAS DE LA SEMANA PARA LA GRÁFICA
   // ==========================================
+  // ==========================================
+  // 🚨 MODO CINE: SIMULADOR TEMPORAL PARA VIDEO
+  // ==========================================
   useEffect(() => {
     if (modoAdmin && vistaAdminTab === "grafica") {
-      async function obtenerVentasSemana() {
-        try {
-          setCargandoGrafica(true);
-          const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-          const deLaSemana = [];
-          
-          // 1. Estructurar el esqueleto de los últimos 7 días
-          for (let i = 6; i >= 0; i--) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            const tzOffset = d.getTimezoneOffset() * 60000;
-            const fechaISO = new Date(d.getTime() - tzOffset).toISOString().split('T')[0];
-            const nombreDia = i === 0 ? 'Hoy' : `${diasSemana[d.getDay()]} ${d.getDate()}`;
-            deLaSemana.push({ fecha: fechaISO, dia: nombreDia, monto: 0, pct: 8, activo: i === 0 });
-          }
-
-          const fechaInicio = deLaSemana[0].fecha;
-          const fechaFin = deLaSemana[6].fecha;
-
-          // 2. Traer las citas de esa semana
-          const { data, error } = await supabase
-            .from('citas')
-            .select('*')
-            .gte('fecha', fechaInicio)
-            .lte('fecha', fechaFin);
-
-          if (error) throw error;
-
-          if (data) {
-            // 3. Mapear y sumar ingresos (Solo Efectivo/Tarjeta)
-            deLaSemana.forEach(diaObj => {
-              const citasDelDiaEsp = data.filter(c => 
-                c.fecha === diaObj.fecha && 
-                c.metodo_pago && 
-                (c.metodo_pago.toLowerCase().trim() === 'efectivo' || c.metodo_pago.toLowerCase().trim() === 'tarjeta')
-              );
-
-              let totalDia = 0;
-              citasDelDiaEsp.forEach(cita => {
-                const s = SERVICIOS.find(serv => serv.nombre.toLowerCase().trim() === (cita.servicio ? cita.servicio.toLowerCase().trim() : ""));
-                const precioNum = s ? parseInt(s.precio.replace('$', '')) : 350;
-                totalDia += precioNum;
-              });
-              diaObj.monto = totalDia;
-            });
-
-            // 4. Calcular la altura de la barra en base a la venta máxima
-            const maxVenta = Math.max(...deLaSemana.map(d => d.monto), 1);
-            deLaSemana.forEach(diaObj => {
-              diaObj.pct = diaObj.monto === 0 ? 8 : Math.round((diaObj.monto / maxVenta) * 85) + 10;
-            });
-
-            setDatosSemanales(deLaSemana);
-          }
-        } catch (err) {
-          console.error("Error al cargar la gráfica semanal:", err);
-        } finally {
-          setCargandoGrafica(false);
-        }
+      const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+      const deLaSemana = [];
+      
+      // 1. Construye los 7 días con montos listos para el video
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const nombreDia = i === 0 ? 'Hoy' : `${diasSemana[d.getDay()]} ${d.getDate()}`;
+        
+        // Los días anteriores tienen entre $4000 y $8000. "Hoy" empieza en $1500 para verlo subir.
+        const montoFalso = i === 0 ? 1500 : Math.floor(Math.random() * (8000 - 4000 + 1)) + 4000;
+        
+        deLaSemana.push({ 
+          fecha: d.toISOString().split('T')[0], 
+          dia: nombreDia, 
+          monto: montoFalso, 
+          pct: Math.floor((montoFalso / 8000) * 100), 
+          activo: i === 0 
+        });
       }
-      obtenerVentasSemana();
+      setDatosSemanales(deLaSemana);
+
+      // 2. Animación en tiempo real para el día "Hoy"
+      const intervaloVideo = setInterval(() => {
+        setDatosSemanales(prevDatos => {
+          return prevDatos.map(dia => {
+            if (dia.dia === 'Hoy') {
+              const montosSimulados = [350, 550, 750]; // Precios de cortes/servicios
+              const aumento = montosSimulados[Math.floor(Math.random() * montosSimulados.length)];
+              const nuevoMonto = dia.monto + aumento;
+              const nuevoPct = Math.min(100, Math.floor((nuevoMonto / 8000) * 100));
+              return { ...dia, monto: nuevoMonto, pct: nuevoPct };
+            }
+            return dia;
+          });
+        });
+      }, 2000); // Sube un servicio cada 2 segundos
+
+      return () => clearInterval(intervaloVideo);
     }
-  }, [modoAdmin, vistaAdminTab, citasDelDia]);
+  }, [modoAdmin, vistaAdminTab]);
   
   const horariosAMostrar = () => {
     const dia = fechaSeleccionada.getDay();

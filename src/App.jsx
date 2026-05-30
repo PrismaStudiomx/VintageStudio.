@@ -21,6 +21,42 @@ export default function BarberiaPremium() {
   const [ocupados, setOcupados] = useState([]);
   const [datosSemanales, setDatosSemanales] = useState([]); // <-- NUEVO ESTADO PARA GRÁFICA
   const [cargandoGrafica, setCargandoGrafica] = useState(false); // <-- NUEVO ESTADO DE CARGA
+  // 🎬 SIMULADOR PROFESIONAL PARA GRABACIÓN DE VIDEO
+useEffect(() => {
+  if (modoAdmin && vistaAdminTab === "grafica") {
+    // 1. Rellenamos los días anteriores con datos "falsos" pero realistas
+    setDatosSemanales(prev => prev.map(dia => {
+      if (dia.dia !== 'Hoy') {
+        // Genera un monto aleatorio entre $2,000 y $5,000 para los días pasados
+        const montoRandom = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
+        const pctRandom = Math.floor(Math.random() * (85 - 40 + 1)) + 40; // Altura de la barra
+        return { ...dia, monto: montoRandom, pct: pctRandom };
+      }
+      // El día de hoy empieza bajito para que se vea crecer
+      return { ...dia, monto: 850, pct: 15 };
+    }));
+
+    // 2. Iniciamos la animación de crecimiento constante para "Hoy"
+    const intervaloVideo = setInterval(() => {
+      setDatosSemanales(prevDatos => {
+        return prevDatos.map(dia => {
+          if (dia.dia === 'Hoy') {
+            const montosSimulados = [350, 450, 600];
+            const aumento = montosSimulados[Math.floor(Math.random() * montosSimulados.length)];
+            
+            const nuevoMonto = dia.monto + aumento;
+            const nuevoPct = Math.min(100, dia.pct + 6); 
+            
+            return { ...dia, monto: nuevoMonto, pct: nuevoPct };
+          }
+          return dia;
+        });
+      });
+    }, 2000); // Sube cada 2 segundos
+
+    return () => clearInterval(intervaloVideo);
+  }
+}, [modoAdmin, vistaAdminTab]);
   // Agrega estas líneas junto a tus otros estados (useState)
 const [menuBarberoAbierto, setMenuBarberoAbierto] = useState(false);
 const [menuServicioAbierto, setMenuServicioAbierto] = useState(false);

@@ -229,81 +229,67 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
   }, [fechaSeleccionada, reserva.barbero, modoAdmin, triggerRecarga]);
 
  // =========================================================================
-  // 1. FUNCIÓN NUEVA: Se encarga de pedir permiso y registrar el cel en Supabase
-  // =========================================================================
-  const activarNotificacionesNativas = async (rol, nombreBarbero) => {
-    try {
-      // Pedirle permiso al celular del cliente/barbero
-      const permiso = await Notification.requestPermission();
-      if (permiso !== 'granted') {
-        console.log('Permiso de notificaciones denegado por el usuario');
-        return;
-      }
+// 1. FUNCIÓN TRADUCTORA: Convierte la llave al formato binario que exige el celular
+// =========================================================================
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
 
-      // Esperar a que el Service Worker esté listo
-      const registro = await navigator.serviceWorker.ready;
-      
-      // Suscribir el dispositivo al servidor Push usando tu Llave Pública VAPID
-      const suscripcion = await registro.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: 'BOmw7H_04kS6j2X4L9_NzQ8uVw6Z8Yx9Cp1Gv7Bt3Rm8Wv9Xb4Nk7Mz2Pq5Lw8Vv9Yc3Bx6N8Mv4Nx1Zb5Kz7Qw==' 
-      });
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
 
-      // Extraer las llaves de encriptación seguras del teléfono
-      const claves = JSON.parse(JSON.stringify(suscripcion));
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
-      // Guardar todo en la NUEVA tabla que creaste en Supabase
-      await supabase.from('suscripciones_push').upsert({
-        endpoint: suscripcion.endpoint,
-        auth: claves.keys.auth,
-        p256dh: claves.keys.p256dh,
-        rol: rol,
-        nombre_barbero: nombreBarbero
-      }, { onConflict: 'endpoint' });
-
-      console.log(`🚀 Notificaciones configuradas con éxito para: ${nombreBarbero || rol}`);
-    } catch (error) {
-      console.error('Error al activar las notificaciones nativas:', error);
+// =========================================================================
+// 2. FUNCIÓN MODIFICADA: Ya incluye la traducción automática de la llave
+// =========================================================================
+const activarNotificacionesNativas = async (rol, nombreBarbero) => {
+  try {
+    // Pedirle permiso al celular
+    const permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') {
+      console.log('Permiso de notificaciones denegado por el usuario');
+      return;
     }
-  };
 
-  // =========================================================================
-  // 2. TU FUNCIÓN MODIFICADA: Reemplaza por completo tu 'manejarLoginAdmin' anterior
-  // =========================================================================
-  const manejarLoginAdmin = (e) => {
-    e.preventDefault(); // Evita que la página se recargue
+    // Esperar a que el Service Worker esté listo
+    const registro = await navigator.serviceWorker.ready;
     
-    const PINS_ACCESO = {
-      "1234": "admin",        // Entras tú a la caja global
-      "1111": "David",        // Entra David a su sillón
-      "2222": "Jorge",        // Entra Jorge a su sillón
-      "3333": "Francisco"     // Entra Francisco a su sillón
-    };
+    // Tu llave original (le quitamos los == del final para evitar problemas)
+    const llavePublicaVapid = 'BOmw7H_04kS6j2X4L9_NzQ8uVw6Z8Yx9Cp1Gv7Bt3Rm8Wv9Xb4Nk7Mz2Pq5Lw8Vv9Yc3Bx6N8Mv4Nx1Zb5Kz7Qw';
+    
+    // 🔥 AQUÍ SE HACE LA MAGIA: Traducimos la llave a binario
+    const llaveConvertida = urlBase64ToUint8Array(llavePublicaVapid);
 
-    const usuarioEncontrado = PINS_ACCESO[pinIngresado];
+    // Suscribir el dispositivo usando la llave perfectamente formateada
+    const suscripcion = await registro.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: llaveConvertida // <-- Pasamos la llave corregida aquí
+    });
 
-    if (usuarioEncontrado === "admin") {
-      setPinCorrecto(true);
-      setModoAdmin(true);
-      setBarberoLogueado(null);
-      setErrorPin(false);
-      
-      // 🔥 AQUÍ SE ACTIVA: Registra este celular como Administrador global
-      activarNotificacionesNativas('admin', null);
+    // Extraer las llaves de encriptación seguras del teléfono
+    const claves = JSON.parse(JSON.stringify(suscripcion));
 
-    } else if (usuarioEncontrado) {
-      setBarberoLogueado(usuarioEncontrado);
-      setModoAdmin(false);
-      setErrorPin(false);
-      
-      // 🔥 AQUÍ SE ACTIVA: Registra este celular únicamente para ese barbero
-      activarNotificacionesNativas('barbero', usuarioEncontrado);
+    // Guardar todo en tu tabla de Supabase
+    await supabase.from('suscripciones_push').upsert({
+      endpoint: suscripcion.endpoint,
+      auth: claves.keys.auth,
+      p256dh: claves.keys.p256dh,
+      rol: rol,
+      nombre_barbero: nombreBarbero
+    }, { onConflict: 'endpoint' });
 
-    } else {
-      setErrorPin(true);
-      setPinIngresado("");
-    }
-  };
+    console.log(`🚀 ¡Notificaciones configuradas con éxito para: ${nombreBarbero || rol}!`);
+  } catch (error) {
+    console.error('Error al activar las notificaciones nativas:', error);
+  }
+};
 
   const registrarWalkIn = async (e) => {
     e.preventDefault();

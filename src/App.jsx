@@ -266,7 +266,7 @@ const activarNotificacionesNativas = async (rol, nombreBarbero) => {
     const registro = await navigator.serviceWorker.ready;
     
     // Tu llave VAPID pública
-    const llavePublicaVapid = 'BOmw7H_04kS6j2X4L9_NzQ8uVw6Z8Yx9Cp1Gv7Bt3Rm8Wv9Xb4Nk7Mz2Pq5Lw8Vv9Yc3Bx6N8Mv4Nx1Zb5Kz7Qw';
+    const llavePublicaVapid = 'BBjLSrl4XnajLhVhd2SBxyMjWBCkP_YoH8XK5wzMjS_Lh_5cl-2Jz1r5LqkuWJsOOyIrzdrIQbuSSGZCAskH93U';
     
     // Convertimos la llave a binario limpio para evitar el error del PushManager
     const llaveConvertida = urlBase64ToUint8Array(llavePublicaVapid);

@@ -228,10 +228,51 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
     };
   }, [fechaSeleccionada, reserva.barbero, modoAdmin, triggerRecarga]);
 
+ // =========================================================================
+  // 1. FUNCIÓN NUEVA: Se encarga de pedir permiso y registrar el cel en Supabase
+  // =========================================================================
+  const activarNotificacionesNativas = async (rol, nombreBarbero) => {
+    try {
+      // Pedirle permiso al celular del cliente/barbero
+      const permiso = await Notification.requestPermission();
+      if (permiso !== 'granted') {
+        console.log('Permiso de notificaciones denegado por el usuario');
+        return;
+      }
+
+      // Esperar a que el Service Worker esté listo
+      const registro = await navigator.serviceWorker.ready;
+      
+      // Suscribir el dispositivo al servidor Push usando tu Llave Pública VAPID
+      const suscripcion = await registro.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: 'BOmw7H_04kS6j2X4L9_NzQ8uVw6Z8Yx9Cp1Gv7Bt3Rm8Wv9Xb4Nk7Mz2Pq5Lw8Vv9Yc3Bx6N8Mv4Nx1Zb5Kz7Qw==' 
+      });
+
+      // Extraer las llaves de encriptación seguras del teléfono
+      const claves = JSON.parse(JSON.stringify(suscripcion));
+
+      // Guardar todo en la NUEVA tabla que creaste en Supabase
+      await supabase.from('suscripciones_push').upsert({
+        endpoint: suscripcion.endpoint,
+        auth: claves.keys.auth,
+        p256dh: claves.keys.p256dh,
+        rol: rol,
+        nombre_barbero: nombreBarbero
+      }, { onConflict: 'endpoint' });
+
+      console.log(`🚀 Notificaciones configuradas con éxito para: ${nombreBarbero || rol}`);
+    } catch (error) {
+      console.error('Error al activar las notificaciones nativas:', error);
+    }
+  };
+
+  // =========================================================================
+  // 2. TU FUNCIÓN MODIFICADA: Reemplaza por completo tu 'manejarLoginAdmin' anterior
+  // =========================================================================
   const manejarLoginAdmin = (e) => {
-    e.preventDefault(); // 🔥 Evita que la página se recargue de golpe
+    e.preventDefault(); // Evita que la página se recargue
     
-    // Diccionario con PINs de 4 números para respetar el diseño de la pantalla
     const PINS_ACCESO = {
       "1234": "admin",        // Entras tú a la caja global
       "1111": "David",        // Entra David a su sillón
@@ -246,13 +287,19 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
       setModoAdmin(true);
       setBarberoLogueado(null);
       setErrorPin(false);
+      
+      // 🔥 AQUÍ SE ACTIVA: Registra este celular como Administrador global
+      activarNotificacionesNativas('admin', null);
+
     } else if (usuarioEncontrado) {
-      // Si es un barbero, lo logueamos directamente y activamos su vista
       setBarberoLogueado(usuarioEncontrado);
       setModoAdmin(false);
       setErrorPin(false);
+      
+      // 🔥 AQUÍ SE ACTIVA: Registra este celular únicamente para ese barbero
+      activarNotificacionesNativas('barbero', usuarioEncontrado);
+
     } else {
-      // Si el PIN no existe en el diccionario, marca error
       setErrorPin(true);
       setPinIngresado("");
     }

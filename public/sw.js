@@ -43,3 +43,38 @@ self.addEventListener('fetch', (e) => {
       })
   );
 });
+// ==========================================
+// ESCUCHAR NOTIFICACIONES PUSH DESDE EL SERVIDOR
+// ==========================================
+self.addEventListener('push', (event) => {
+  let data = { titulo: 'Nueva Cita', cuerpo: 'Tienes una nueva reserva en Vintage Studio.' };
+  
+  if (event.data) {
+    data = event.data.json();
+  }
+
+  const opciones = {
+    body: data.cuerpo,
+    icon: '/icon-192x192.png', // Ruta a tu logo
+    badge: '/icon-192x192.png',
+    vibrate: [200, 100, 200],
+    data: { url: '/' } // Abre la app al dar clic
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.titulo, opciones)
+  );
+});
+
+// Al dar clic a la notificación, abre la app
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      if (clientList.length > 0) {
+        return clientList[0].focus();
+      }
+      return clients.openWindow(event.notification.data.url);
+    })
+  );
+});

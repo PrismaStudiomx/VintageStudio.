@@ -568,40 +568,40 @@ const fechaFinal = `${anio}-${mes}-${dia}`;
     html2pdf().set(opciones).from(elemento).save();
   };
   // =========================================================================
-  // FUNCIÓN CORREGIDA: Ahora sí guarda en Supabase antes de abrir WhatsApp
+  // FUNCIÓN DEFINITIVA: Sincronizada al 100% con tu Tabla SQL de Supabase
   // =========================================================================
   const finalizarCita = async () => {
     try {
-      // 1. Formatear la fecha en formato limpio YYYY-MM-DD para la base de datos
-      const fechaFormateada = fechaSeleccionada.toISOString().split('T')[0];
+      // 1. Extraer la fecha en formato local estricto (YYYY-MM-DD)
+      const anio = fechaSeleccionada.getFullYear();
+      const mes = String(fechaSeleccionada.getMonth() + 1).padStart(2, '0');
+      const dia = String(fechaSeleccionada.getDate()).padStart(2, '0');
+      const fechaFormateada = `${anio}-${mes}-${dia}`;
 
-      // 2. 🔥 GUARDAR EN SUPABASE
-      // Como tu diseño actual no le pide nombre/teléfono al cliente en pantalla (va directo a WhatsApp),
-      // le ponemos "Cliente Web" por defecto, tal como lo tienes programado en tu panel de administración.
+      // 2. 🔥 GUARDAR EN SUPABASE (Estructura exacta de tu SQL)
       const { data, error } = await supabase
-        .from('citas')
-        .select('*') // Opcional, pero ideal para verificar
         .from('citas')
         .insert([
           {
-            cliente_nombre: "Cliente Web",
-            cliente_telefono: "S/N",
-            servicio: reserva.servicio?.nombre,
-            barbero: reserva.barbero,
             fecha: fechaFormateada,
-            hora: reserva.horario,
-            estado: 'pendiente' // Inicia como pendiente para que puedas gestionarlo
+            horario: reserva.horario,       // <- Corregido: 'horario' en vez de 'hora'
+            barbero: reserva.barbero,
+            servicio: reserva.servicio?.nombre,
+            tipo_cita: 'online',            // Sigue tu valor por defecto de SQL
+            cliente_nombre: 'Cliente Web',  // Coincide con 'cliente_nombre'
+            metodo_pago: 'pendiente'        // Coincide con 'metodo_pago'
           }
         ]);
 
       if (error) {
         console.error("❌ Error al insertar la cita en Supabase:", error);
-        alert("Hubo un problema al registrar tu cita en el sistema, pero puedes continuar por WhatsApp.");
+        alert(`Error del sistema: ${error.message}`);
+        return; // Detiene el flujo si hay un error real de base de datos
       } else {
-        console.log("✅ Cita guardada con éxito en Supabase.");
+        console.log("✅ ¡Cita guardada con éxito en Supabase!");
       }
 
-      // 3. ENVIAR NOTIFICACIÓN PUSH A TU SERVIDOR (Tu lógica original mejorada con la fecha)
+      // 3. ENVIAR NOTIFICACIÓN PUSH A TU SERVIDOR
       fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -618,7 +618,7 @@ const fechaFinal = `${anio}-${mes}-${dia}`;
       console.error("Error crítico en el proceso de finalización:", err);
     }
 
-    // 4. ABRIR WHATSAPP (Tu lógica original intacta)
+    // 4. ABRIR WHATSAPP
     const texto = `Hola! Quiero agendar un turno:\n- Servicio: ${reserva.servicio?.nombre}\n- Barbero: ${reserva.barbero}\n- Fecha: ${fechaSeleccionada.toLocaleDateString()}\n- Hora: ${reserva.horario}`;
     const url = `https://wa.me/5213331891551?text=${encodeURIComponent(texto)}`;
     window.open(url, '_blank');

@@ -28,8 +28,8 @@ export default async function handler(req, res) {
 
     // 2. CONFIGURAR LLAVES VAPID
     // ⚠️ REEMPLAZA ESTAS LLAVES POR UNAS REALES GENERADAS CON 'npx web-push generate-vapid-keys'
-    const publicVapidKey = 'BOmw7H_04kS6j2X4L9_NzQ8uVw6Z8Yx9Cp1Gv7Bt3Rm8Wv9Xb4Nk7Mz2Pq5Lw8Vv9Yc3Bx6N8Mv4Nx1Zb5Kz7Qw==';
-    const privateVapidKey = 'A-Nx8Vw3Mz2Lq5Pw9Vv8Yc6Bx4N8Mv2Nx1Zb5Kz7Q==';
+    const publicVapidKey = 'BBjLSrl4XnajLhVhd2SBxyMjWBCkP_YoH8XK5wzMjS_Lh_5cl-2Jz1r5LqkuWJsOOyIrzdrIQbuSSGZCAskH93U';
+    const privateVapidKey = 'qGB1zPxtCSeY_PHlE0WrEUxx8Eo7z366NdOvn3nMLTk';
 
     try {
       webpush.setVapidDetails(

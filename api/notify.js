@@ -15,6 +15,21 @@ export default async function handler(req, res) {
 
     const horarioFinal = cita.horario || cita.hora || "Hora no especificada";
     const clienteFinal = cita.cliente || cita.cliente_nombre || "Cliente Web";
+    
+    // OBTENER Y FORMATEAR LA FECHA CORRECTAMENTE
+    let fechaFinal = cita.fecha || "Fecha no especificada";
+    if (cita.fecha && cita.fecha.includes('-')) {
+      try {
+        // Convierte el formato YYYY-MM-DD a texto amigable ("miércoles, 3 de junio")
+        fechaFinal = new Date(cita.fecha + 'T00:00:00').toLocaleDateString('es-MX', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long'
+        });
+      } catch (e) {
+        fechaFinal = cita.fecha;
+      }
+    }
 
     // 1. VERIFICACIÓN DE VARIABLES DE ENTORNO
     const supabaseUrl = process.env.SUPABASE_URL;
@@ -27,7 +42,6 @@ export default async function handler(req, res) {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 2. CONFIGURAR LLAVES VAPID
-    // ⚠️ REEMPLAZA ESTAS LLAVES POR UNAS REALES GENERADAS CON 'npx web-push generate-vapid-keys'
     const publicVapidKey = 'BBjLSrl4XnajLhVhd2SBxyMjWBCkP_YoH8XK5wzMjS_Lh_5cl-2Jz1r5LqkuWJsOOyIrzdrIQbuSSGZCAskH93U';
     const privateVapidKey = 'qGB1zPxtCSeY_PHlE0WrEUxx8Eo7z366NdOvn3nMLTk';
 
@@ -41,7 +55,7 @@ export default async function handler(req, res) {
       throw new Error(`Error en las llaves VAPID: ${vapidErr.message}. Asegúrate de usar llaves reales.`);
     }
 
-    // 3. BUSCAR DISPOSITIVOS (Control de seguridad por si barbero viene vacío)
+    // 3. BUSCAR DISPOSITIVOS
     const barberoBuscado = cita.barbero || "Ninguno";
     const { data: subs, error } = await supabase
       .from('suscripciones_push')
@@ -61,12 +75,14 @@ export default async function handler(req, res) {
         keys: { auth: sub.auth, p256dh: sub.p256dh }
       };
 
+      // Notificación por defecto (Dueño / Admin)
       let titulo = "💈 ¡Nueva Cita Agendada!";
-      let cuerpo = `${clienteFinal} reservó ${cita.servicio} a las ${horarioFinal} con ${cita.barbero}.`;
+      let cuerpo = `${clienteFinal} reservó ${cita.servicio} para el ${fechaFinal} a las ${horarioFinal} con ${cita.barbero}.`;
 
+      // Notificación específica para el Barbero (Quitamos la palabra "hoy")
       if (sub.rol === 'barbero') {
         titulo = `✂️ ¡Tienes trabajo nuevo, ${sub.nombre_barbero}!`;
-        cuerpo = `${clienteFinal} reservó un ${cita.servicio} contigo hoy a las ${horarioFinal}.`;
+        cuerpo = `${clienteFinal} reservó un ${cita.servicio} contigo el ${fechaFinal} a las ${horarioFinal}.`;
       }
 
       try {
@@ -83,7 +99,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, mensajes_enviados: subs.length });
 
   } catch (err) {
-    // 🔥 AQUÍ ESTÁ EL TRUCO: Devolvemos el mensaje exacto al frontend para diagnosticarlo rápido
     console.error('Error maestro en el disparador:', err);
     return res.status(500).json({ 
       error: 'Error interno del servidor', 

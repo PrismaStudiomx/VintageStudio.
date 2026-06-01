@@ -25,6 +25,7 @@ export default function BarberiaPremium() {
 const [menuBarberoAbierto, setMenuBarberoAbierto] = useState(false);
 const [menuServicioAbierto, setMenuServicioAbierto] = useState(false);
 const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
+const [citasPendientesFuturas, setCitasPendientesFuturas] = useState([]);
   
   // ESTADOS DEL PRISMA DASHBOARD
   const [modoAdmin, setModoAdmin] = useState(false);
@@ -176,6 +177,41 @@ const [menuPagoAbierto, setMenuPagoAbierto] = useState(false);
     }
     return ocupados.includes(horaTexto);
   };
+  // =========================================================================
+// EFECTO: TRAER TODAS LAS CITAS PENDIENTES FUTURAS (PRÓXIMOS 7 DÍAS)
+// =========================================================================
+useEffect(() => {
+  if (modoAdmin && vistaAdminTab === "pendientes") {
+    async function obtenerPendientesFuturas() {
+      try {
+        const hoy = new Date();
+        const tzOffset = hoy.getTimezoneOffset() * 60000;
+        const hoyISO = new Date(hoy.getTime() - tzOffset).toISOString().split('T')[0];
+
+        // Traemos las citas de hoy en adelante
+        const { data, error } = await supabase
+          .from('citas')
+          .select('*')
+          .gte('fecha', hoyISO)
+          .order('fecha', { ascending: true })
+          .order('horario', { ascending: true });
+
+        if (error) throw error;
+
+        if (data) {
+          // Filtramos solo las que no se han pagado (Efectivo/Tarjeta)
+          const filtradas = data.filter(c => 
+            !c.metodo_pago || c.metodo_pago.toLowerCase().trim() === 'pendiente'
+          );
+          setCitasPendientesFuturas(filtradas);
+        }
+      } catch (err) {
+        console.error("Error al cargar pendientes futuras:", err);
+      }
+    }
+    obtenerPendientesFuturas();
+  }
+}, [modoAdmin, vistaAdminTab, triggerRecarga]);
 
   // CONSULTA A SUPABASE
   // CONSULTA A SUPABASE CON ANTENA EN TIEMPO REAL (REALTIME)
@@ -603,15 +639,17 @@ const fechaFinal = `${anio}-${mes}-${dia}`;
 
       // 3. ENVIAR NOTIFICACIÓN PUSH A TU SERVIDOR
       fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          barbero: reserva.barbero,
-          cliente: "Cliente Web",
-          servicio: reserva.servicio?.nombre,
-          fecha: fechaFormateada,
-          hora: reserva.horario
-        })
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    barbero: reserva.barbero,
+    cliente: "Cliente Web",
+    servicio: reserva.servicio?.nombre,
+    fecha: fechaFormateada,
+    // 🔥 NUEVO: Enviamos el día de la semana y mes formateado de forma legible
+    fechaTexto: fechaSeleccionada.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }),
+    hora: reserva.horario
+  })
       }).catch(err => console.error("Error al enviar el push de notificación:", err));
 
     } catch (err) {
@@ -713,202 +751,268 @@ const fechaFinal = `${anio}-${mes}-${dia}`;
 
         <div className="w-full mx-auto space-y-6 max-w-md md:max-w-full">
           
-          {vistaAdminTab === "agenda" ? (
-            <>
-              {/* --- CONTROL INTERNO: PESTAÑA AGENDA OPERATIVA --- */}
-              <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6 pb-2">
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-white">PANEL DE AGENDAS</h1>
-                  <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">
-                    FECHA: <span className="font-mono text-neutral-400 font-black">{new Date().toLocaleDateString('es-MX')}</span>
-                  </p>
-                </div>
-                
-                <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
-                  <button onClick={() => setMostrarModalWalkIn(true)} className="bg-[#d4af37] text-black py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider transition-all hover:bg-white">+ VENTA MOSTRADOR</button>
-                  <button onClick={descargarCorteCaja} className="bg-[#161616] border border-neutral-800 text-[#d4af37] py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider transition-all hover:bg-neutral-900">📥 DESCARGAR PDF</button>
-                </div>
-              </div>
+          {vistaAdminTab === "agenda" && (
+  <>
+    {/* --- CONTROL INTERNO: PESTAÑA AGENDA OPERATIVA --- */}
+    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end gap-6 pb-2">
+      <div>
+        <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-white">PANEL DE AGENDAS</h1>
+        <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">
+          FECHA: <span className="font-mono text-neutral-400 font-black">{new Date().toLocaleDateString('es-MX')}</span>
+        </p>
+      </div>
+      
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+        <button onClick={() => setMostrarModalWalkIn(true)} className="bg-[#d4af37] text-black py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider transition-all hover:bg-white">+ VENTA MOSTRADOR</button>
+        <button onClick={descargarCorteCaja} className="bg-[#161616] border border-neutral-800 text-[#d4af37] py-3 px-5 rounded-xl font-black uppercase text-xs tracking-wider transition-all hover:bg-neutral-900">📥 DESCARGAR PDF</button>
+      </div>
+    </div>
 
-              {/* CAJA DE INGRESOS TOTALES EN AGENDA */}
-              <div className="bg-[#161616] border border-neutral-800 rounded-xl p-4 mb-3 shadow-lg flex justify-between items-center max-w-2xl">
-                <div>
-                  <span className="block text-[9px] text-neutral-500 uppercase tracking-widest font-black mb-1">Caja Estimada Hoy</span>
-                  <span className="block text-[9px] text-[#d4af37]/60 uppercase tracking-wider font-bold">Datos en vivo</span>
+    {/* CAJA DE INGRESOS TOTALES EN AGENDA */}
+    <div className="bg-[#161616] border border-neutral-800 rounded-xl p-4 mb-3 shadow-lg flex justify-between items-center max-w-2xl">
+      <div>
+        <span className="block text-[9px] text-neutral-500 uppercase tracking-widest font-black mb-1">Caja Estimada Hoy</span>
+        <span className="block text-[9px] text-[#d4af37]/60 uppercase tracking-wider font-bold">Datos en vivo</span>
+      </div>
+      <span className="text-2xl text-[#d4af37] font-black font-mono">${calcularIngresosDelDia().toLocaleString()} MXN</span>
+    </div>
+    <div className="flex flex-col sm:flex-row gap-3 max-w-2xl">
+      <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1">
+        <span className="text-[10px] text-white uppercase tracking-wider font-black">✓ SERVICIOS LISTOS</span>
+        <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPagadas.length}</span>
+      </div>
+      <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1">
+        <span className="text-[10px] text-white uppercase tracking-wider font-black">⏳ POR COBRAR</span>
+        <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPendientes.length}</span>
+      </div>
+    </div>
+   
+    {/* REJILLA DE SILLAS DE BARBEROS */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {BARBEROS.map((barbero) => {
+        const esperaDelBarbero = citasDelDia.filter(c => c.barbero === barbero && (!c.metodo_pago || (c.metodo_pago.toLowerCase().trim() !== 'efectivo' && c.metodo_pago.toLowerCase().trim() !== 'tarjeta')));
+        return (
+          <div key={barbero} className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+            <div className="border-b border-white/[0.03] pb-3 mb-4 flex justify-between items-center">
+              <h3 className="text-xs font-black uppercase text-white tracking-wider">SILLAS DE {barbero}</h3>
+              <span className="text-[9px] bg-[#0f0f0f] border border-neutral-800 text-neutral-400 px-2.5 py-0.5 rounded-full font-mono">{esperaDelBarbero.length} citas</span>
+            </div>
+            <div className="space-y-2 min-h-[160px] flex flex-col justify-center">
+              {esperaDelBarbero.length === 0 ? (
+                <div className="text-center py-10 border border-dashed border-neutral-800/80 rounded-xl">
+                  <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-black">SIN CITAS</p>
                 </div>
-                <span className="text-2xl text-[#d4af37] font-black font-mono">${calcularIngresosDelDia().toLocaleString()} MXN</span>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 max-w-2xl">
-                <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1">
-                  <span className="text-[10px] text-white uppercase tracking-wider font-black">✓ SERVICIOS LISTOS</span>
-                  <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPagadas.length}</span>
-                </div>
-                <div className="bg-[#161616] border border-neutral-800 px-4 py-3 rounded-xl flex justify-between items-center flex-1">
-                  <span className="text-[10px] text-white uppercase tracking-wider font-black">⏳ POR COBRAR</span>
-                  <span className="text-xs bg-[#0f0f0f] border border-neutral-800 px-2 py-0.5 rounded text-white font-black font-mono">{citasPendientes.length}</span>
-                </div>
-              </div>
-             
-              {/* REJILLA DE SILLAS DE BARBEROS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {BARBEROS.map((barbero) => {
-                  const esperaDelBarbero = citasDelDia.filter(c => c.barbero === barbero && (!c.metodo_pago || (c.metodo_pago.toLowerCase().trim() !== 'efectivo' && c.metodo_pago.toLowerCase().trim() !== 'tarjeta')));
-                  return (
-                    <div key={barbero} className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
-                      <div className="border-b border-white/[0.03] pb-3 mb-4 flex justify-between items-center">
-                        <h3 className="text-xs font-black uppercase text-white tracking-wider">SILLAS DE {barbero}</h3>
-                        <span className="text-[9px] bg-[#0f0f0f] border border-neutral-800 text-neutral-400 px-2.5 py-0.5 rounded-full font-mono">{esperaDelBarbero.length} citas</span>
-                      </div>
-                      <div className="space-y-2 min-h-[160px] flex flex-col justify-center">
-                        {esperaDelBarbero.length === 0 ? (
-                          <div className="text-center py-10 border border-dashed border-neutral-800/80 rounded-xl">
-                            <p className="text-[10px] text-neutral-500 uppercase tracking-widest font-black">SIN CITAS</p>
-                          </div>
-                        ) : (
-                          esperaDelBarbero.map((cita, idx) => (
-                            <div key={idx} className="bg-[#0f0f0f] p-3 rounded-xl border border-neutral-800">
-                              <span className="text-[#d4af37] font-mono text-[9px] font-black block mb-1">• {cita.horario}</span>
-                              <p className="text-xs font-black text-white uppercase">{cita.cliente_nombre || 'Cliente Online'}</p>
-                              <p className="text-[10px] text-white/70 uppercase truncate">{cita.servicio}</p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              ) : (
+                esperaDelBarbero.map((cita, idx) => (
+                  <div key={idx} className="bg-[#0f0f0f] p-3 rounded-xl border border-neutral-800">
+                    <span className="text-[#d4af37] font-mono text-[9px] font-black block mb-1">• {cita.horario}</span>
+                    <p className="text-xs font-black text-white uppercase">{cita.cliente_nombre || 'Cliente Online'}</p>
+                    <p className="text-[10px] text-white/70 uppercase truncate">{cita.servicio}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
 
-              {/* HISTORIAL DE VENTAS */}
-              <div className="pt-4">
-                <p className="text-xs text-white uppercase tracking-[0.15em] font-black mb-4">💰 HISTORIAL DE VENTAS LIQUIDADAS</p>
-                <div className="bg-[#161616] border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/[0.04] bg-[#0f0f0f]/60 text-[9px] text-white uppercase font-black">
-                        <th className="p-4 pl-6">Horario</th>
-                        <th className="p-4">Barbero</th>
-                        <th className="p-4">Servicio</th>
-                        <th className="p-4 pr-6 text-right">Monto</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.02] text-xs uppercase font-black text-white">
-                      {citasPagadas.length === 0 ? (
-                        <tr><td colSpan="4" className="p-8 text-center text-white/40 text-[9px] tracking-widest">NO HAY VENTAS HOY.</td></tr>
-                      ) : (
-                        citasPagadas.map((cita, idx) => {
-                          const precioEncontrado = SERVICIOS.find(s => s.nombre.toLowerCase().trim() === (cita.servicio ? cita.servicio.toLowerCase().trim() : ""))?.precio || "$350";
-                          return (
-                            <tr key={idx} className="hover:bg-[#0f0f0f]/50 transition-colors">
-                              <td className="p-4 pl-6 font-mono text-[#d4af37]">{cita.horario}</td>
-                              <td className="p-4">{cita.barbero}</td>
-                              <td className="p-4 text-white/80">{cita.servicio}</td>
-                              <td className="p-4 pr-6 text-right font-mono">${precioEncontrado.replace('$', '')}</td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          ) : (
-            
-            <>
-              {/* --- CONTROL INTERNO: NUEVA PESTAÑA ANALÍTICA (MÉTRICAS E IMAGEN) --- */}
-              <div>
-                <h1 className="text-3xl font-black uppercase tracking-tight text-white">RENDIMIENTO</h1>
-                <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">Estadísticas comerciales de la semana</p>
-              </div>
+    {/* HISTORIAL DE VENTAS */}
+    <div className="pt-4">
+      <p className="text-xs text-white uppercase tracking-[0.15em] font-black mb-4">💰 HISTORIAL DE VENTAS LIQUIDADAS</p>
+      <div className="bg-[#161616] border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-white/[0.04] bg-[#0f0f0f]/60 text-[9px] text-white uppercase font-black">
+              <th className="p-4 pl-6">Horario</th>
+              <th className="p-4">Barbero</th>
+              <th className="p-4">Servicio</th>
+              <th className="p-4 pr-6 text-right">Monto</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[0.02] text-xs uppercase font-black text-white">
+            {citasPagadas.length === 0 ? (
+              <tr><td colSpan="4" className="p-8 text-center text-white/40 text-[9px] tracking-widest">NO HAY VENTAS HOY.</td></tr>
+            ) : (
+              citasPagadas.map((cita, idx) => {
+                const precioEncontrado = SERVICIOS.find(s => s.nombre.toLowerCase().trim() === (cita.servicio ? cita.servicio.toLowerCase().trim() : ""))?.precio || "$350";
+                return (
+                  <tr key={idx} className="hover:bg-[#0f0f0f]/50 transition-colors">
+                    <td className="p-4 pl-6 font-mono text-[#d4af37]">{cita.horario}</td>
+                    <td className="p-4">{cita.barbero}</td>
+                    <td className="p-4 text-white/80">{cita.servicio}</td>
+                    <td className="p-4 pr-6 text-right font-mono">${precioEncontrado.replace('$', '')}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </>
+)}
 
-              {/* Caja de Ingresos Totales (Estilo Premium - DATOS REALES LIMPIOS) */}
-            <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-6 text-center shadow-lg">
-              <span className="block text-[9px] text-neutral-500 uppercase tracking-widest font-black mb-1">Caja Estimada Hoy</span>
-              <span className="text-3xl text-[#d4af37] font-black font-mono">${calcularIngresosDelDia().toLocaleString()} MXN</span>
-              <span className="block text-[9px] text-neutral-600 uppercase tracking-wider mt-1 font-bold">Datos en vivo desde Supabase</span>
+{vistaAdminTab === "grafica" && (
+  <>
+    {/* --- CONTROL INTERNO: NUEVA PESTAÑA ANALÍTICA (MÉTRICAS E IMAGEN) --- */}
+    <div>
+      <h1 className="text-3xl font-black uppercase tracking-tight text-white">RENDIMIENTO</h1>
+      <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">Estadísticas comerciales de la semana</p>
+    </div>
+
+    {/* Caja de Ingresos Totales (Estilo Premium - DATOS REALES LIMPIOS) */}
+    <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-6 text-center shadow-lg">
+      <span className="block text-[9px] text-neutral-500 uppercase tracking-widest font-black mb-1">Caja Estimada Hoy</span>
+      <span className="text-3xl text-[#d4af37] font-black font-mono">${calcularIngresosDelDia().toLocaleString()} MXN</span>
+      <span className="block text-[9px] text-neutral-600 uppercase tracking-wider mt-1 font-bold">Datos en vivo desde Supabase</span>
+    </div>
+
+    {/* GRÁFICA DE ALTA FIDELIDAD CON MARGEN DE SEGURIDAD PROTEGIDO */}
+    <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 shadow-2xl mb-8"></div>
+
+    {/* GRÁFICA DE ALTA FIDELIDAD CON CONEXIÓN REAL A SUPABASE */}
+    <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 shadow-2xl">
+      <div className="flex justify-between items-center mb-6">
+        <span className="text-[10px] uppercase font-black tracking-wider text-neutral-400">Ingresos Semanales</span>
+        <span className="text-xs font-black text-white font-mono">
+          ${datosSemanales.reduce((acc, curr) => acc + curr.monto, 0).toLocaleString()} MXN
+        </span>
+      </div>
+      
+      {/* Contenedor de Barras Reactivo con altura fija protegida */}
+      <div className="h-44 w-full flex items-end justify-between px-2 pt-4 relative">
+        {/* Líneas Horizontales de Guía */}
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7 pt-4">
+          <div className="border-b border-neutral-900/60 w-full"></div>
+          <div className="border-b border-neutral-900/60 w-full"></div>
+          <div className="border-b border-neutral-900/60 w-full"></div>
+        </div>
+
+        {/* Renderizado estructural dinámico de los 7 días */}
+        {cargandoGrafica ? (
+          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-[#d4af37] font-black uppercase tracking-widest z-20">
+            Calculando historial...
+          </div>
+        ) : (
+          datosSemanales.map((bar, i) => (
+            <div key={i} className="flex flex-col items-center flex-1 group relative z-10 mx-0.5 sm:mx-1 h-full justify-end">
+              {/* Burbuja informativa al pasar el cursor (Muestra el monto real) */}
+              <div className="absolute -top-7 bg-black border border-neutral-800 text-[#d4af37] font-mono text-[9px] font-black px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-30">
+                ${bar.monto.toLocaleString()}
+              </div>
+              
+              {/* Columna de la Barra */}
+              <div 
+                style={{ height: `${bar.pct}%` }} 
+                className={`w-full max-w-[24px] ${
+                  bar.activo 
+                    ? 'bg-[#d4af37] shadow-[0_0_12px_rgba(212,175,55,0.4)]' 
+                    : 'bg-neutral-800/80 group-hover:bg-neutral-700'
+                } rounded-t-md transition-all duration-700 shadow-md`}
+              ></div>
+              
+              {/* Texto inferior (Día) */}
+              <span className={`text-[8px] sm:text-[9px] font-black uppercase tracking-tighter mt-2.5 ${bar.activo ? 'text-[#d4af37]' : 'text-neutral-500'}`}>
+                {bar.dia}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+
+    {/* Espaciador de seguridad al final para evitar el corte de la barra de navegación */}
+    <div className="h-12"></div>
+  </>
+)}
+
+{vistaAdminTab === "pendientes" && (
+  <div className="space-y-6 w-full animate-fade-in">
+    <div>
+      <h2 className="text-2xl font-black uppercase tracking-tight text-white">Próximos 7 Días</h2>
+      <p className="text-[11px] text-neutral-500 uppercase tracking-wider mt-1 font-bold">Turnos agendados pendientes de cobro</p>
+    </div>
+
+    {(!citasPendientesFuturas || citasPendientesFuturas.length === 0) ? (
+      <div className="bg-[#111] border border-neutral-800/60 p-8 rounded-2xl text-center text-neutral-500 text-xs uppercase tracking-widest font-black">
+        No hay próximas citas registradas.
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {citasPendientesFuturas.map((cita, idx) => (
+          <div key={idx} className="bg-[#111] border border-neutral-800/80 rounded-xl p-4 shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-center border-b border-white/[0.03] pb-2 mb-2">
+                <span className="text-[10px] font-mono font-black text-[#d4af37] bg-black px-2 py-0.5 rounded border border-neutral-800">
+                  {cita.fecha}
+                </span>
+                <span className="text-[10px] font-mono font-black text-white">
+                  {cita.horario}
+                </span>
+              </div>
+              <h4 className="text-xs font-black uppercase text-white truncate mt-1">
+                {cita.cliente_nombre || 'Cliente Online'}
+              </h4>
+              <p className="text-[10px] text-neutral-400 uppercase truncate mt-0.5">
+                {cita.servicio}
+              </p>
+              <div className="mt-2.5 flex items-center gap-1.5">
+                <span className="text-[8px] uppercase tracking-wider font-bold text-neutral-500">Barbero:</span>
+                <span className="text-[9px] bg-neutral-900 border border-neutral-800 px-2 py-0.2 rounded text-neutral-300 font-mono font-bold">
+                  {cita.barbero}
+                </span>
+              </div>
             </div>
 
-            {/* GRÁFICA DE ALTA FIDELIDAD CON MARGEN DE SEGURIDAD PROTEGIDO */}
-            <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 shadow-2xl mb-8"></div>
+            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/[0.03] mt-4">
+              <button type="button" onClick={() => confirmarPagoCita(cita, 'efectivo')} className="bg-green-600/10 hover:bg-green-600 border border-green-600/20 text-green-400 hover:text-white text-[9px] font-black py-2 rounded-lg uppercase transition-all">💵 Efec</button>
+              <button type="button" onClick={() => confirmarPagoCita(cita, 'tarjeta')} className="bg-blue-600/10 hover:bg-blue-600 border border-blue-600/20 text-blue-400 hover:text-white text-[9px] font-black py-2 rounded-lg uppercase transition-all">💳 Tarj</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+    
+    {/* Espaciador de seguridad */}
+    <div className="h-12"></div>
+  </div>
+)}
 
-              {/* GRÁFICA DE ALTA FIDELIDAD CON CONEXIÓN REAL A SUPABASE */}
-              <div className="bg-[#161616] border border-neutral-800 rounded-2xl p-5 shadow-2xl">
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-[10px] uppercase font-black tracking-wider text-neutral-400">Ingresos Semanales</span>
-                  <span className="text-xs font-black text-white font-mono">
-                    ${datosSemanales.reduce((acc, curr) => acc + curr.monto, 0).toLocaleString()} MXN
-                  </span>
-                </div>
-                
-                {/* Contenedor de Barras Reactivo con altura fija protegida */}
-                <div className="h-44 w-full flex items-end justify-between px-2 pt-4 relative">
-                  {/* Líneas Horizontales de Guía */}
-                  <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7 pt-4">
-                    <div className="border-b border-neutral-900/60 w-full"></div>
-                    <div className="border-b border-neutral-900/60 w-full"></div>
-                    <div className="border-b border-neutral-900/60 w-full"></div>
-                  </div>
-
-                  {/* Renderizado estructural dinámico de los 7 días */}
-                  {cargandoGrafica ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-[#d4af37] font-black uppercase tracking-widest z-20">
-                      Calculando historial...
-                    </div>
-                  ) : (
-                    datosSemanales.map((bar, i) => (
-                      <div key={i} className="flex flex-col items-center flex-1 group relative z-10 mx-0.5 sm:mx-1 h-full justify-end">
-                        {/* Burbuja informativa al pasar el cursor (Muestra el monto real) */}
-                        <div className="absolute -top-7 bg-black border border-neutral-800 text-[#d4af37] font-mono text-[9px] font-black px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl z-30">
-                          ${bar.monto.toLocaleString()}
-                        </div>
-                        
-                        {/* Columna de la Barra */}
-                        <div 
-                          style={{ height: `${bar.pct}%` }} 
-                          className={`w-full max-w-[24px] ${
-                            bar.activo 
-                              ? 'bg-[#d4af37] shadow-[0_0_12px_rgba(212,175,55,0.4)]' 
-                              : 'bg-neutral-800/80 group-hover:bg-neutral-700'
-                          } rounded-t-md transition-all duration-700 shadow-md`}
-                        ></div>
-                        
-                        {/* Texto inferior (Día) */}
-                        <span className={`text-[8px] sm:text-[9px] font-black uppercase tracking-tighter mt-2.5 ${bar.activo ? 'text-[#d4af37]' : 'text-neutral-500'}`}>
-                          {bar.dia}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Espaciador de seguridad al final para evitar el corte de la barra de navegación */}
-              <div className="h-12"></div>
-            </>
-          )}
-
-        </div>
+</div>
 
         {/* BARRA DE NAVEGACIÓN INFERIOR PREMIUM (Fija abajo flotando) */}
 
-<div className="fixed bottom-0 left-0 w-full lg:relative lg:bottom-auto bg-[#0a0a0a]/90 backdrop-blur-md border-t border-white/[0.03] flex justify-around items-center py-4 z-50 shadow-2xl">           <button 
-             onClick={() => setVistaAdminTab("agenda")} 
-             className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'agenda' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
-           >
-             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
-             <span className="text-[9px] font-black uppercase tracking-widest">Ver Agenda</span>
-           </button>
-           
-           <button 
-             onClick={() => setVistaAdminTab("grafica")} 
-             className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'grafica' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
-           >
-             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>
-             <span className="text-[9px] font-black uppercase tracking-widest">Ver Gráfica</span>
-           </button>
-        </div>
+<div className="fixed bottom-0 left-0 w-full lg:relative lg:bottom-auto bg-[#0a0a0a]/90 backdrop-blur-md border-t border-white/[0.03] flex justify-around items-center py-4 z-50 shadow-2xl"> 
+  
+  {/* BOTÓN 1: AGENDA */}
+  <button 
+    onClick={() => setVistaAdminTab("agenda")} 
+    className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'agenda' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
+    <span className="text-[9px] font-black uppercase tracking-widest">Ver Agenda</span>
+  </button>
 
+  {/* NUEVO BOTÓN INTERMEDIO: CITAS FUTURAS */}
+  <button 
+    onClick={() => setVistaAdminTab("pendientes")} 
+    className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'pendientes' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span className="text-[9px] font-black uppercase tracking-widest">Citas Futuras</span>
+  </button>
+  
+  {/* BOTÓN 3: GRÁFICA */}
+  <button 
+    onClick={() => setVistaAdminTab("grafica")} 
+    className={`flex flex-col items-center gap-1.5 transition-all ${vistaAdminTab === 'grafica' ? 'text-[#d4af37] scale-105 font-black' : 'text-neutral-600 hover:text-neutral-400'}`}
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>
+    <span className="text-[9px] font-black uppercase tracking-widest">Ver Gráfica</span>
+  </button>
+
+</div>
         {/* CONTENEDOR MODAL VENTA MOSTRADOR (Conserva intacta toda tu lógica de captura) */}
         {mostrarModalWalkIn && (
           <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4">
@@ -968,73 +1072,145 @@ const fechaFinal = `${anio}-${mes}-${dia}`;
       </div>
     );
   }
-     // ==========================================
-// VISTA 3: PANEL EXCLUSIVO DE BARBEROS
+    
 // ==========================================
-// ==========================================
-  // VISTA 3: PANEL EXCLUSIVO DE BARBEROS
+  // VISTA 3: PANEL EXCLUSIVO DE BARBEROS (PREMIUM)
   // ==========================================
   if (barberoLogueado) {
     const misCitasDelDia = citasDelDia.filter(cita => cita.barbero === barberoLogueado && BARBEROS.includes(cita.barbero));
     const serviciosCompletados = misCitasDelDia.filter(c => c.metodo_pago && c.metodo_pago.toLowerCase().trim() !== 'pendiente').length;
+    
+    // Métrica calculada de servicios restantes
+    const serviciosPendientes = misCitasDelDia.length - serviciosCompletados;
 
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white p-4 font-sans">
-        <nav className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+      <div className="min-h-screen bg-[#0a0a0a] text-white p-4 font-sans animate-fade-in">
+        
+        {/* NAV SUPERIOR */}
+        <nav className="flex justify-between items-center mb-6 border-b border-white/[0.04] pb-4">
           <div>
-            <p className="text-[10px] text-[#d4af37] tracking-widest uppercase">Especialista Activo</p>
-            <h1 className="text-xl font-black uppercase tracking-tight">💈 {barberoLogueado}</h1>
+            <p className="text-[9px] text-[#d4af37] tracking-widest uppercase font-black">Especialista Activo</p>
+            <h1 className="text-2xl font-black uppercase tracking-tight text-white mt-0.5">💈 {barberoLogueado}</h1>
           </div>
-          <button onClick={() => setBarberoLogueado(null)} className="text-[10px] uppercase font-bold text-white/40 border border-white/10 px-3 py-1.5 rounded-lg hover:text-white">
+          <button 
+            onClick={() => {
+              setBarberoLogueado(null);
+              window.location.hash = '#login'; // Redirección explícita a la sección de login
+            }} 
+            className="text-[10px] uppercase font-black tracking-wider text-neutral-400 border border-neutral-800 bg-[#111] px-4 py-2 rounded-xl hover:text-white hover:bg-neutral-900 transition-all"
+          >
             Salir
           </button>
         </nav>
 
-        <div className="bg-[#121212] border border-white/5 rounded-2xl p-4 mb-6 flex justify-between items-center">
-          <div>
-            <p className="text-xs text-white/50 uppercase">Servicios Hoy</p>
-            <p className="text-2xl font-black text-[#d4af37]">{misCitasDelDia.length}</p>
+        {/* CONTENEDOR DE MÉTRICAS (SOLO NÚMERO DE SERVICIOS) */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="bg-[#161616] border border-neutral-800/60 rounded-xl p-3.5 shadow-md">
+            <span className="block text-[9px] text-neutral-500 uppercase tracking-wider font-bold">Total Servicios</span>
+            <span className="block text-xl font-black text-white font-mono mt-0.5">{misCitasDelDia.length}</span>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-white/50 uppercase">Completados</p>
-            <p className="text-2xl font-black text-green-400">{serviciosCompletados}</p>
+          <div className="bg-[#161616] border border-neutral-800/60 rounded-xl p-3.5 shadow-md">
+            <span className="block text-[9px] text-neutral-500 uppercase tracking-wider font-bold">Completados</span>
+            <span className="block text-xl font-black text-green-400 font-mono mt-0.5">{serviciosCompletados}</span>
+          </div>
+          <div className="bg-[#161616] border border-neutral-800/60 rounded-xl p-3.5 shadow-md">
+            <span className="block text-[9px] text-neutral-500 uppercase tracking-wider font-bold">Pendientes</span>
+            <span className="block text-xl font-black text-amber-400 font-mono mt-0.5">{serviciosPendientes}</span>
           </div>
         </div>
 
-        <h2 className="text-xs font-black uppercase tracking-wider text-white/40 mb-3">Mi Agenda del Día</h2>
+        {/* LISTADO DE AGENDA */}
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-xs font-black uppercase tracking-widest text-neutral-400">Mi Agenda del Día</h2>
+          <span className="text-[10px] font-mono text-neutral-600 uppercase font-bold">En vivo</span>
+        </div>
+
         <div className="space-y-3">
           {misCitasDelDia.length > 0 ? (
             misCitasDelDia.map((cita, index) => {
               const esPendiente = !cita.metodo_pago || cita.metodo_pago.toLowerCase().trim() === 'pendiente';
-              return (
-                <div key={index} className={`p-4 rounded-xl border transition-all ${esPendiente ? 'bg-[#161616] border-[#d4af37]/30' : 'bg-[#121212]/40 border-white/5 opacity-60'}`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-sm font-black text-[#d4af37] bg-[#d4af37]/10 px-2 py-0.5 rounded-md">{cita.horario}</span>
-                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-md ${esPendiente ? 'bg-amber-500/10 text-amber-400' : 'bg-green-500/10 text-green-400'}`}>
-                      {esPendiente ? 'En Espera' : `✓ ${cita.metodo_pago.toUpperCase()}`}
-                    </span>
-                  </div>
-                  <p className="font-bold text-white uppercase text-sm">{cita.cliente_nombre || "Cliente Online"}</p>
-                  <p className="text-xs text-white/60 mt-0.5">{cita.servicio}</p>
 
+              return (
+                <div 
+                  key={index} 
+                  className={`p-4 rounded-xl border transition-all duration-300 flex flex-col justify-between ${
+                    esPendiente 
+                      ? 'bg-[#141414] border-neutral-800 hover:border-neutral-700 shadow-lg' 
+                      : 'bg-[#111]/40 border-neutral-900/40 opacity-40 select-none'
+                  }`}
+                >
+                  <div>
+                    {/* Encabezado de la Tarjeta de Cita */}
+                    <div className="flex justify-between items-center mb-2.5">
+                      <span className="text-xs font-mono font-black text-[#d4af37] bg-[#d4af37]/5 border border-[#d4af37]/10 px-2.5 py-0.5 rounded-md">
+                        {cita.horario}
+                      </span>
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${
+                        esPendiente 
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/10' 
+                          : 'bg-green-500/10 text-green-400 border border-green-500/10'
+                      }`}>
+                        {esPendiente ? 'En Espera' : `✓ ${cita.metodo_pago.toUpperCase()}`}
+                      </span>
+                    </div>
+
+                    {/* Detalles del Cliente y Servicio */}
+                    <h3 className="font-black text-white uppercase text-sm tracking-tight">
+                      {cita.cliente_nombre || "Cliente Online"}
+                    </h3>
+                    <p className="text-xs text-neutral-400 uppercase font-medium truncate mt-1">
+                      {cita.servicio}
+                    </p>
+                  </div>
+
+                  {/* CONTROL DE FLUJO DE COBRO */}
                   {esPendiente && (
-                    citaEnPago?.id === cita.id ? (
-                      <div className="grid grid-cols-2 gap-2 mt-3">
-                        <button type="button" onClick={() => confirmarPagoCita(cita, 'efectivo')} className="bg-green-600 text-white text-[10px] font-black py-2 rounded-lg uppercase">Efectivo</button>
-                        <button type="button" onClick={() => confirmarPagoCita(cita, 'tarjeta')} className="bg-blue-600 text-white text-[10px] font-black py-2 rounded-lg uppercase">Tarjeta</button>
-                        <button type="button" onClick={() => setCitaEnPago(null)} className="col-span-2 text-white/30 text-[9px] uppercase underline mt-1">Cancelar</button>
-                      </div>
-                    ) : (
-                      <button type="button" onClick={() => setCitaEnPago(cita)} className="w-full mt-3 bg-[#d4af37] text-black text-xs font-black py-2 rounded-lg uppercase tracking-wider active:scale-95 transition-transform">
-                        Marcar como Listo
-                      </button>
-                    )
+                    <div className="mt-4 pt-3 border-t border-white/[0.02]">
+                      {citaEnPago?.id === cita.id ? (
+                        <div className="space-y-2">
+                          <p className="text-[9px] text-center uppercase tracking-widest text-neutral-500 font-bold">Selecciona Método de Pago</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button 
+                              type="button" 
+                              onClick={() => confirmarPagoCita(cita, 'efectivo')} 
+                              className="bg-green-600/10 hover:bg-green-600 border border-green-600/20 text-green-400 hover:text-white text-[10px] font-black py-2.5 rounded-xl uppercase transition-all shadow-md"
+                            >
+                              💵 Efectivo
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => confirmarPagoCita(cita, 'tarjeta')} 
+                              className="bg-blue-600/10 hover:bg-blue-600 border border-blue-600/20 text-blue-400 hover:text-white text-[10px] font-black py-2.5 rounded-xl uppercase transition-all shadow-md"
+                            >
+                              💳 Tarjeta
+                            </button>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => setCitaEnPago(null)} 
+                            className="w-full text-center text-neutral-500 hover:text-neutral-300 text-[9px] uppercase tracking-wider font-bold pt-1 transition-colors"
+                          >
+                            Volver atrás
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          type="button" 
+                          onClick={() => setCitaEnPago(cita)} 
+                          className="w-full bg-[#d4af37] text-black text-xs font-black py-2.5 rounded-xl uppercase tracking-wider hover:bg-white active:scale-[0.98] transition-all shadow-lg"
+                        >
+                          Cobrar
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               );
             })
           ) : (
-            <div className="text-center py-10 text-white/30 text-xs italic">No tienes servicios asignados para hoy todavía.</div>
+            <div className="text-center py-12 border border-dashed border-neutral-900 rounded-2xl bg-[#111]/20">
+              <p className="text-[10px] text-neutral-600 uppercase tracking-widest font-black">No tienes servicios asignados para hoy.</p>
+            </div>
           )}
         </div>
       </div>
